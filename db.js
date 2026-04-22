@@ -35,6 +35,12 @@ export const connectDB = async () => {
   return pool
 }
 
+// src/db.js
+// Pool de conexiones a PostgreSQL. Importa este módulo en cualquier ruta
+// y llama a db.query(sql, params) o db.getClient() para transacciones.
+export const query = (text, params) => pool.query(text, params)
+export const connect = () => pool.connect()
+
 export const getPool = () => {
   if (!pool) {
     throw new Error('Pool no inicializado. Llama connectDB primero.')

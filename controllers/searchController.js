@@ -35,13 +35,14 @@ export const postBuscarHospedaje = async (req, res) => {
             return res.status(400).json({ error: 'Parámetro habitaciones requerido' })
         }
 
-        const maxAdultos = Math.max(...habitaciones.map(h => parseInt(h.adultos) || 0))
-        const maxNinos   = Math.max(...habitaciones.map(h => parseInt(h.ninos)   || 0))
+        // Evitar error de -Infinity si el array está vacío
+        const maxAdultos = habitaciones.length > 0 ? Math.max(...habitaciones.map(h => parseInt(h.adultos) || 0)) : 0
+        const maxNinos   = habitaciones.length > 0 ? Math.max(...habitaciones.map(h => parseInt(h.ninos)   || 0)) : 0
 
-        // Tomar solo la primera parte antes de la coma
-        const textoBusqueda = destino
-            ? `%${destino.split(',')[0].trim()}%`
-            : '%'
+        // Limpieza del destino: toma la primera parte antes de la coma y limpia espacios
+        const rawDestino = (destino || '').toString();
+        const primeraParte = rawDestino.split(',')[0].trim();
+        const textoBusqueda = primeraParte ? `%${primeraParte}%` : '%';
 
         console.log('=== BÚSQUEDA ===')
         console.log('destino recibido:', destino)
@@ -144,6 +145,7 @@ export const postBuscarHospedaje = async (req, res) => {
             total_resenas:            parseInt(r.total_resenas) || 0,
             habitaciones_disponibles: parseInt(r.habitaciones_disponibles) || 0,
             amenidades:               amenidadesMap[r.id_servicio] || [],
+            imagen_portada:           imagenesMap[r.id_servicio]?.[0] || null,
             imagenes:                 imagenesMap[r.id_servicio]   || [],
         }))
 
@@ -171,7 +173,13 @@ export const getDetalleHospedaje = async (req, res) => {
                 p."NOMBRE"        AS pais,
                 u."NOMBRE"        AS ubicacion_nombre,
                 th."NOMBRE_TIPO"  AS tipo_hospedaje,
-                pr."NOMBRE_LEGAL" AS proveedor
+                pr."NOMBRE_LEGAL" AS proveedor,
+                hos."CHECKIN",
+                hos."CHECKOUT",
+                hos."CANCELACION",
+                hos."MASCOTAS",
+                hos."FUMAR",
+                hos."DESCRIPCION"
             FROM "SERVICIO"       s
             JOIN "HOSPEDAJE"      hos ON hos."ID_HOSPEDAJE"  = s."ID_SERVICIO"
             JOIN "TIPO_HOSPEDAJE" th  ON th."ID_TIPO"        = hos."ID_TIPO"
@@ -197,7 +205,26 @@ export const getDetalleHospedaje = async (req, res) => {
             ORDER BY hab."PRECIO_NOCHE" ASC
         `, [id])
 
-        res.json({ ...rows[0], habitaciones })
+        const { rows: imagenes } = await pool.query(`
+            SELECT "URL", "ORDEN", "ALT_TEXT"
+            FROM "IMAGEN_HOSPEDAJE"
+            WHERE "ID_HOSPEDAJE" = $1
+            ORDER BY "ORDEN" ASC
+        `, [id])
+
+        const { rows: amenidades } = await pool.query(`
+            SELECT si."NOMBRE"
+            FROM "HOSPEDAJE_SERVICIO" hs
+            JOIN "SERVICIO_INCLUIDO" si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
+            WHERE hs."ID_HOSPEDAJE" = $1
+        `, [id])
+
+        res.json({ 
+            ...rows[0], 
+            habitaciones, 
+            imagenes, 
+            amenidades: amenidades.map(a => a.NOMBRE) 
+        })
 
     } catch (err) {
         console.error('getDetalleHospedaje:', err.message)

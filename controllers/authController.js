@@ -79,6 +79,7 @@ export const googleLogin = async (req, res) => {
     res.json({
       token,
       user: {
+        id: user.ID_USUARIO,
         username: user.USUARIO,
         email: user.CORREO_ELECTRONICO,
         googleUser: true,
@@ -132,6 +133,7 @@ export const loginUser = async (req, res) => {
     res.json({
       token,
       user: {
+        id: user.ID_USUARIO,
         username: user.USUARIO,
         email: user.CORREO_ELECTRONICO,
       },
@@ -191,6 +193,7 @@ export const registerUser = async (req, res) => {
     res.status(201).json({
       token,
       user: {
+        id: user.ID_USUARIO,
         username: user.USUARIO,
         email: user.CORREO_ELECTRONICO,
       },
