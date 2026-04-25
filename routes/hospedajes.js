@@ -359,4 +359,75 @@ router.delete('/:id', authenticateToken, async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ─────────────────────────────────────────────────────────────────
+// GET /api/search/ubicaciones — buscador para LocationDropdown
+// ─────────────────────────────────────────────────────────────────
+router.get('/search/ubicaciones', async (req, res, next) => {
+  const { q } = req.query;
+  try {
+    const { rows } = await db.query(
+      `SELECT 
+        u."ID_UBICACION" AS "id", 
+        u."ID_TIPO"      AS "id_tipo", 
+        u."NOMBRE"       AS "ubicacion", 
+        ci."NOMBRE"      AS "ciudad", 
+        pa."NOMBRE"      AS "pais"
+      FROM public."UBICACION" u
+      JOIN public."CIUDAD"    ci ON ci."ID_CIUDAD" = u."ID_CIUDAD"
+      JOIN public."PAIS"      pa ON pa."ID_PAIS"   = ci."ID_PAIS"
+      WHERE u."NOMBRE" ILIKE $1 OR ci."NOMBRE" ILIKE $1
+      LIMIT 10`,
+      [`%${q || ''}%`]
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// POST /api/search/hospedaje — buscador principal usado en Cuerpo.vue
+// ─────────────────────────────────────────────────────────────────
+router.post('/search/hospedaje', async (req, res, next) => {
+  const { destino } = req.body;
+  try {
+    const { rows } = await db.query(
+      `SELECT
+         h."ID_HOSPEDAJE" AS "id_servicio",
+         s."NOMBRE"       AS "hotel",
+         th."NOMBRE_TIPO" AS "tipo_hospedaje",
+         u."NOMBRE"       AS "ubicacion",
+         -- Subconsulta para todas las imágenes del hotel
+         ARRAY(
+           SELECT img."URL"
+           FROM public."IMAGEN_HOSPEDAJE" img
+           WHERE img."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
+           ORDER BY img."ORDEN"
+         ) AS "imagenes",
+         -- Subconsulta para nombres de amenidades
+         ARRAY(
+           SELECT si."NOMBRE"
+           FROM public."HOSPEDAJE_SERVICIO" hs
+           JOIN public."SERVICIO_INCLUIDO"  si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
+           WHERE hs."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
+         ) AS "amenidades",
+         -- Campos para el rating (pueden ser nulos o calculados)
+         NULL AS "calificacion_promedio",
+         0    AS "total_resenas",
+         -- Cálculo del precio mínimo basado en sus habitaciones
+         (SELECT MIN(hab."PRECIO_NOCHE")
+          FROM public."HABITACION" hab
+          WHERE hab."ID_HOSPEDAJE" = h."ID_HOSPEDAJE") AS "precio_min"
+       FROM public."HOSPEDAJE"      h
+       JOIN public."SERVICIO"       s  ON s."ID_SERVICIO"  = h."ID_HOSPEDAJE"
+       JOIN public."TIPO_HOSPEDAJE" th ON th."ID_TIPO"     = h."ID_TIPO"
+       JOIN public."UBICACION"      u  ON u."ID_UBICACION" = h."ID_UBICACION"
+       JOIN public."CIUDAD"         ci ON ci."ID_CIUDAD"   = u."ID_CIUDAD"
+       WHERE s."NOMBRE" ILIKE $1 
+          OR u."NOMBRE" ILIKE $1 
+          OR ci."NOMBRE" ILIKE $1`,
+      [`%${destino || ''}%`]
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
 export default router;

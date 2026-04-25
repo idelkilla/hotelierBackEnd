@@ -16,11 +16,38 @@ export const getUbicaciones = async (req, res) => {
             JOIN "CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
             JOIN "PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
             WHERE ($1 = '' OR u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
-            ORDER BY u."NOMBRE" LIMIT 5
+            ORDER BY u."NOMBRE"
         `, [q ? `%${q}%` : ''])
         res.json(rows)
     } catch (err) {
         console.error('getUbicaciones:', err.message)
+        res.status(500).json([])
+    }
+}
+
+// GET /api/search/aeropuertos?q=texto
+export const getAeropuertos = async (req, res) => {
+    const { q } = req.query
+    try {
+        const pool = getPool()
+        const { rows } = await pool.query(`
+            SELECT
+                u."ID_UBICACION" AS id,
+                u."NOMBRE"       AS ubicacion,
+                u."ID_TIPO"      AS id_tipo,
+                c."NOMBRE"       AS ciudad,
+                p."NOMBRE"       AS pais
+            FROM "UBICACION" u
+            JOIN "CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
+            JOIN "PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
+            WHERE u."ID_TIPO" = 3
+              AND ($1 = '' OR u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
+            ORDER BY u."NOMBRE"
+            LIMIT 10
+        `, [q ? `%${q}%` : ''])
+        res.json(rows)
+    } catch (err) {
+        console.error('getAeropuertos:', err.message)
         res.status(500).json([])
     }
 }
