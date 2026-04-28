@@ -11,14 +11,12 @@
 // Habitaciones  → POST /hospedajes/:id/habitaciones  (bulk)
 // Imágenes      → POST /hospedajes/:id/imagenes      (multipart/form-data)
 
+import 'dotenv/config';
 import { Router } from 'express';
 import path from 'path';
 import * as db from '../db.js';
 import upload from '../config/upload.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
-import dotenv from 'dotenv';
-
-dotenv.config();
 const router = Router();
 const SERVER_URL                  = process.env.SERVER_URL || 'http://localhost:3000'
 const ID_TIPO_SERVICIO_HOSPEDAJE  = parseInt(process.env.ID_TIPO_SERVICIO_HOSPEDAJE || '1')
