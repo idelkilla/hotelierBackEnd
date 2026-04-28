@@ -14,6 +14,14 @@ import errorHandler from './middleware/errorHandler.js'
 
 const app = express()
 
+// 1. PRIMERO: Headers de Seguridad para Google Auth
+app.use((req, res, next) => {
+  // Cambia esto a 'unsafe-none' para permitir la comunicación con el popup de Google
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  next();
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
