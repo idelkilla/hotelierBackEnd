@@ -29,7 +29,7 @@ const allowedOrigins = [
   'http://localhost:5174',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
-  'https://hotelierfronend-ka0o.onrender.com', // Nota: Verifica si falta la 't' en 'frontend'
+  'https://hotelierfrontend-ka0o.onrender.com',
   process.env.FRONTEND_URL
 ].filter(Boolean).map(url => url.replace(/\/$/, ''));
 
@@ -39,7 +39,7 @@ app.use(cors({
 }));
 
 // 3. TERCERO: Parche para Preflight (Fix del PathError)
-// Usamos la sintaxis de llaves para el comodín global
+// Usamos la sintaxis de llaves compatible con v8+ para capturar todas las rutas
 app.options('{*path}', cors());
 
 // 4. CUARTO: Parsers y Rutas Estáticas

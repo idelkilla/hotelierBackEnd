@@ -3,20 +3,24 @@ import { getPool } from '../db.js'
 // GET /api/search/ubicaciones?q=texto
 export const getUbicaciones = async (req, res) => {
     const { q } = req.query
+    // Si no hay búsqueda, devolvemos array vacío rápido
+    if (!q || q.trim() === '') return res.json([]);
+
     try {
         const pool = getPool()
         const { rows } = await pool.query(`
             SELECT
                 u."ID_UBICACION" AS id,
                 u."NOMBRE"       AS ubicacion,
-                u."ID_TIPO"      AS id_tipo,
+                u."ID_TIPO"      AS id_tipo, 
                 c."NOMBRE"       AS ciudad,
                 p."NOMBRE"       AS pais
             FROM "UBICACION" u
             JOIN "CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
             JOIN "PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
-            WHERE ($1 = '' OR u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
+            WHERE (u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
             ORDER BY u."NOMBRE"
+            LIMIT 10
         `, [q ? `%${q}%` : ''])
         res.json(rows)
     } catch (err) {
@@ -28,6 +32,9 @@ export const getUbicaciones = async (req, res) => {
 // GET /api/search/aeropuertos?q=texto
 export const getAeropuertos = async (req, res) => {
     const { q } = req.query
+    // Salida temprana si la búsqueda está vacía
+    if (!q || q.trim() === '') return res.json([]);
+
     try {
         const pool = getPool()
         const { rows } = await pool.query(`
@@ -41,7 +48,7 @@ export const getAeropuertos = async (req, res) => {
             JOIN "CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
             JOIN "PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
             WHERE u."ID_TIPO" = 3
-              AND ($1 = '' OR u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
+              AND (u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
             ORDER BY u."NOMBRE"
             LIMIT 10
         `, [q ? `%${q}%` : ''])

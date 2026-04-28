@@ -11,7 +11,7 @@ export const getProfile = async (req, res) => {
       SELECT 
           u."USUARIO" AS username, 
           u."CORREO_ELECTRONICO" AS email, 
-          p."NOMBRE_COMPLETO" AS nombre, 
+          p."NOMBRE_COMPLETO" AS nombre_completo, 
           p."APELLIDOS" AS apellidos, 
           p."NUM_VIAJERO_CONOCIDO" AS tsa_id, 
           p."CONTACTO_EMERGENCIA_NOMBRE" AS emergencia_nombre, 
