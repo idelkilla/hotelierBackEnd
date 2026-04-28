@@ -29,7 +29,9 @@ const allowedOrigins = [
   'http://localhost:5174',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
+  'http://localhost:5175', // Agregado por si Vite cambia de puerto
   'https://hotelierfrontend-ka0o.onrender.com',
+  'https://hotelierfronend-ka0o.onrender.com', // Por si acaso existe el typo sin 't'
   process.env.FRONTEND_URL
 ].filter(Boolean).map(url => url.replace(/\/$/, ''));
 
@@ -39,9 +41,9 @@ app.use(cors({
 }));
 
 // 3. TERCERO: Parche para Preflight (Fix del PathError)
-// Usamos la sintaxis de llaves compatible con v8+ para capturar todas las rutas
+// Cambiamos a '*' porque es el estándar universal. Si usas '{*path}' en Express 4, 
+// las peticiones OPTIONS fallarán y el navegador bloqueará la búsqueda.
 app.options('{*path}', cors());
-
 // 4. CUARTO: Parsers y Rutas Estáticas
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))

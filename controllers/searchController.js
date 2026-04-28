@@ -8,20 +8,23 @@ export const getUbicaciones = async (req, res) => {
 
     try {
         const pool = getPool()
+        const searchText = `%${q.trim()}%`
+        console.log(`🔍 Buscando ubicaciones con: "${searchText}"`);
+
         const { rows } = await pool.query(`
             SELECT
                 u."ID_UBICACION" AS id,
                 u."NOMBRE"       AS ubicacion,
                 u."ID_TIPO"      AS id_tipo, 
-                c."NOMBRE"       AS ciudad,
-                p."NOMBRE"       AS pais
-            FROM "UBICACION" u
-            JOIN "CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
-            JOIN "PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
-            WHERE (u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
+                COALESCE(c."NOMBRE", '') AS ciudad,
+                COALESCE(p."NOMBRE", '') AS pais
+            FROM public."UBICACION" u
+            LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
+            LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
+            WHERE (u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1)
             ORDER BY u."NOMBRE"
             LIMIT 10
-        `, [q ? `%${q}%` : ''])
+        `, [searchText])
         res.json(rows)
     } catch (err) {
         console.error('getUbicaciones:', err.message)
@@ -37,6 +40,7 @@ export const getAeropuertos = async (req, res) => {
 
     try {
         const pool = getPool()
+        const searchText = `%${q}%`
         const { rows } = await pool.query(`
             SELECT
                 u."ID_UBICACION" AS id,
@@ -44,14 +48,14 @@ export const getAeropuertos = async (req, res) => {
                 u."ID_TIPO"      AS id_tipo,
                 c."NOMBRE"       AS ciudad,
                 p."NOMBRE"       AS pais
-            FROM "UBICACION" u
-            JOIN "CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
-            JOIN "PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
+            FROM public."UBICACION" u
+            LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
+            LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
             WHERE u."ID_TIPO" = 3
               AND (u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
             ORDER BY u."NOMBRE"
             LIMIT 10
-        `, [q ? `%${q}%` : ''])
+        `, [searchText])
         res.json(rows)
     } catch (err) {
         console.error('getAeropuertos:', err.message)
@@ -73,10 +77,12 @@ export const postBuscarHospedaje = async (req, res) => {
         const maxAdultos = habitaciones.length > 0 ? Math.max(...habitaciones.map(h => parseInt(h.adultos) || 0)) : 0
         const maxNinos   = habitaciones.length > 0 ? Math.max(...habitaciones.map(h => parseInt(h.ninos)   || 0)) : 0
 
-        // Limpieza del destino: toma la primera parte antes de la coma y limpia espacios
+        // RESTAURADO: Limpieza del destino para evitar fallos con comas del dropdown
         const rawDestino = (destino || '').toString();
         const primeraParte = rawDestino.split(',')[0].trim();
         const textoBusqueda = primeraParte ? `%${primeraParte}%` : '%';
+        
+        // 2. Si el destino viene vacío, usamos '%', de lo contrario buscamos el string tal cual
 
         console.log('=== BÚSQUEDA ===')
         console.log('destino recibido:', destino)
@@ -96,20 +102,21 @@ export const postBuscarHospedaje = async (req, res) => {
                 ROUND(AVG(r."CALIFICACION")::NUMERIC, 1) AS calificacion_promedio,
                 COUNT(DISTINCT r."ID_RESENA")            AS total_resenas,
                 COUNT(DISTINCT hab."ID_HABITACION")      AS habitaciones_disponibles
-            FROM      "SERVICIO"       s
-            JOIN      "HOSPEDAJE"      hos ON hos."ID_HOSPEDAJE" = s."ID_SERVICIO"
-            JOIN      "TIPO_HOSPEDAJE" th  ON th."ID_TIPO"       = hos."ID_TIPO"
-            JOIN      "UBICACION"      u   ON u."ID_UBICACION"   = hos."ID_UBICACION"
-            JOIN      "CIUDAD"         c   ON c."ID_CIUDAD"      = u."ID_CIUDAD"
-            JOIN      "PAIS"           p   ON p."ID_PAIS"        = c."ID_PAIS"
-            JOIN      "HABITACION"     hab ON hab."ID_HOSPEDAJE" = hos."ID_HOSPEDAJE"
-            LEFT JOIN "RESENA"         r   ON r."ID_SERVICIO"    = s."ID_SERVICIO"
+            FROM      public."SERVICIO"       s
+            JOIN      public."HOSPEDAJE"      hos ON hos."ID_HOSPEDAJE" = s."ID_SERVICIO"
+            JOIN      public."TIPO_HOSPEDAJE" th  ON th."ID_TIPO"       = hos."ID_TIPO"
+            JOIN      public."UBICACION"      u   ON u."ID_UBICACION"   = hos."ID_UBICACION"
+            JOIN      public."CIUDAD"         c   ON c."ID_CIUDAD"      = u."ID_CIUDAD"
+            JOIN      public."PAIS"           p   ON p."ID_PAIS"        = c."ID_PAIS"
+            JOIN      public."HABITACION"     hab ON hab."ID_HOSPEDAJE" = hos."ID_HOSPEDAJE"
+            LEFT JOIN public."RESENA"         r   ON r."ID_SERVICIO"    = s."ID_SERVICIO"
             WHERE
                 (
                     $1 = '%'
                     OR c."NOMBRE"  ILIKE $1
                     OR u."NOMBRE"  ILIKE $1
                     OR p."NOMBRE"  ILIKE $1
+                    OR s."NOMBRE"  ILIKE $1 -- También busca por nombre de hotel
                 )
                 AND hab."CAPACIDAD_ADULTO" >= $2
                 AND hab."CAPACIDAD_NINOS"  >= $3
@@ -134,8 +141,8 @@ export const postBuscarHospedaje = async (req, res) => {
         try {
             const { rows: srvRows } = await pool.query(`
                 SELECT hs."ID_HOSPEDAJE" AS id_hospedaje, si."NOMBRE" AS nombre
-                FROM "HOSPEDAJE_SERVICIO" hs
-                JOIN "SERVICIO_INCLUIDO"  si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
+                FROM public."HOSPEDAJE_SERVICIO" hs
+                JOIN public."SERVICIO_INCLUIDO"  si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
                 WHERE hs."ID_HOSPEDAJE" = ANY($1)
             `, [ids])
             srvRows.forEach(({ id_hospedaje, nombre }) => {

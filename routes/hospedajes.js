@@ -373,8 +373,8 @@ router.get('/search/ubicaciones', async (req, res, next) => {
         ci."NOMBRE"      AS "ciudad", 
         pa."NOMBRE"      AS "pais"
       FROM public."UBICACION" u
-      JOIN public."CIUDAD"    ci ON ci."ID_CIUDAD" = u."ID_CIUDAD"
-      JOIN public."PAIS"      pa ON pa."ID_PAIS"   = ci."ID_PAIS"
+      LEFT JOIN public."CIUDAD" ci ON ci."ID_CIUDAD" = u."ID_CIUDAD"
+      LEFT JOIN public."PAIS"   pa ON pa."ID_PAIS"   = ci."ID_PAIS"
       WHERE u."NOMBRE" ILIKE $1 OR ci."NOMBRE" ILIKE $1
       LIMIT 10`,
       [`%${q || ''}%`]
