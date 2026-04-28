@@ -22,8 +22,20 @@ app.use((req, res, next) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://hotelierfronend-ka0o.onrender.com', // Tu URL actual (sin la 't')
+  process.env.FRONTEND_URL                     // Por si acaso configuras una nueva en Render
+];
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS Error: Origen ${origin} no permitido`));
+    }
+  },
   credentials: true,
 }))
 app.use(express.json())
