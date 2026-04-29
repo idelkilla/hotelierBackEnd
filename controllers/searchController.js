@@ -1,15 +1,30 @@
 import { getPool } from '../db.js'
 
+const validateSearchQuery = (q) => {
+    if (!q || typeof q !== 'string' || q.trim() === '') return ''
+    return q.trim()
+}
+
+const validateId = (id) => {
+    const parsed = parseInt(id, 10)
+    if (isNaN(parsed) || parsed <= 0) return null
+    return parsed
+}
+
 // GET /api/search/ubicaciones?q=texto
 export const getUbicaciones = async (req, res) => {
     const { q } = req.query
-    try {
-        // Validación temprana consistente
-        if (!q || q.trim() === '') return res.json([])
+    const query = validateSearchQuery(q)
 
+    try {
         const pool = getPool()
-        const searchText = `%${q.trim()}%`
-        console.log(`🔍 Buscando ubicaciones: "${q.trim()}"`)
+        
+        let searchText = '%'
+        if (query) {
+            searchText = `%${query}%`
+        }
+        
+        console.log(`🔍 Buscando ubicaciones: "${query || 'todas'}"`)
 
         const { rows } = await pool.query(`
             SELECT
@@ -18,6 +33,7 @@ export const getUbicaciones = async (req, res) => {
                 c."NOMBRE"       as ciudad,
                 p."NOMBRE"       as pais,
                 u."ID_TIPO"      as id_tipo,
+                tu."NOMBRE"      as tipo_nombre,
                 tu."ICONO"       as icono
             FROM public."UBICACION" u
             JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
@@ -25,26 +41,41 @@ export const getUbicaciones = async (req, res) => {
             JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
             WHERE u."NOMBRE" ILIKE $1
             ORDER BY u."NOMBRE"
-            LIMIT 10
+            LIMIT 20
         `, [searchText])
         
         console.log(`✅ ${rows.length} resultado(s) encontrado(s)`)
+        
+        // Log para debug
+        if (rows.length > 0) {
+            console.log('🔍 Primeros 3 resultados:')
+            rows.slice(0, 3).forEach(r => {
+                console.log(`  - ${r.ubicacion} (ID_TIPO: ${r.id_tipo}, Icono: ${r.icono})`)
+            })
+        }
+        
         res.json(rows)
     } catch (err) {
         console.error('❌ Error en getUbicaciones:', err.message)
-        res.status(500).json([]) // Consistente con getAeropuertos
+        res.status(500).json([])
     }
 }
 
 // GET /api/search/aeropuertos?q=texto
 export const getAeropuertos = async (req, res) => {
     const { q } = req.query
-    // Salida temprana si la búsqueda está vacía
-    if (!q || q.trim() === '') return res.json([]);
+    const query = validateSearchQuery(q)
 
     try {
         const pool = getPool()
-        const searchText = `%${q.trim()}%`
+        
+        let searchText = '%'
+        if (query) {
+            searchText = `%${query}%`
+        }
+        
+        console.log(`🔍 Buscando aeropuertos: "${query || 'todos'}"`)
+        
         const { rows } = await pool.query(`
             SELECT
                 u."ID_UBICACION" as id,
@@ -52,6 +83,7 @@ export const getAeropuertos = async (req, res) => {
                 c."NOMBRE"       as ciudad,
                 p."NOMBRE"       as pais,
                 u."ID_TIPO"      as id_tipo,
+                tu."NOMBRE"      as tipo_nombre,
                 tu."ICONO"       as icono
             FROM public."UBICACION" u
             JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
@@ -60,8 +92,10 @@ export const getAeropuertos = async (req, res) => {
             WHERE u."ID_TIPO" = 1
               AND (u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
             ORDER BY u."NOMBRE"
-            LIMIT 10
+            LIMIT 20
         `, [searchText])
+        
+        console.log(`✅ ${rows.length} resultado(s) encontrado(s)`)
         res.json(rows)
     } catch (err) {
         console.error('❌ Error en getAeropuertos:', err.message)
@@ -69,32 +103,47 @@ export const getAeropuertos = async (req, res) => {
     }
 }
 
+// POST /api/search/hospedaje
 export const postBuscarHospedaje = async (req, res) => {
     const { destino, habitaciones, fecha_inicio, fecha_fin } = req.body
 
     try {
-        const pool = getPool()
-
-        if (!habitaciones || !Array.isArray(habitaciones)) {
-            return res.status(400).json({ error: 'Parámetro habitaciones requerido' })
+        if (!habitaciones || !Array.isArray(habitaciones) || habitaciones.length === 0) {
+            return res.status(400).json({ error: 'Parámetro habitaciones requerido y no vacío' })
         }
 
-        // Evitar error de -Infinity si el array está vacío
-        const maxAdultos = habitaciones.length > 0 ? Math.max(...habitaciones.map(h => parseInt(h.adultos) || 0)) : 0
-        const maxNinos   = habitaciones.length > 0 ? Math.max(...habitaciones.map(h => parseInt(h.ninos)   || 0)) : 0
+        if (!fecha_inicio || !fecha_fin) {
+            return res.status(400).json({ error: 'Fechas de inicio y fin requeridas' })
+        }
 
-        // LIMPIEZA CRÍTICA: 
-        // Si el destino es "Punta Cana, La Altagracia, RD", solo buscamos "Punta Cana"
-        const rawDestino = (destino || '').toString().trim();
-        const primeraParte = rawDestino.split(',')[0].trim();
-        const textoBusqueda = primeraParte ? `%${primeraParte}%` : '%';
+        const fechaInicio = new Date(fecha_inicio)
+        const fechaFin = new Date(fecha_fin)
+        
+        if (isNaN(fechaInicio.getTime()) || isNaN(fechaFin.getTime())) {
+            return res.status(400).json({ error: 'Formato de fecha inválido' })
+        }
 
-        console.log('=== BÚSQUEDA ===')
-        console.log('destino recibido:', destino)
-        console.log('textoBusqueda:', textoBusqueda)
-        console.log('maxAdultos:', maxAdultos, '| maxNinos:', maxNinos)
+        if (fechaFin <= fechaInicio) {
+            return res.status(400).json({ error: 'La fecha fin debe ser posterior a la fecha inicio' })
+        }
 
-        // ── 1. Query principal ──────────────────────────────────────────────
+        const pool = getPool()
+
+        if (!habitaciones.every(h => h.adultos !== undefined && h.ninos !== undefined)) {
+            return res.status(400).json({ error: 'Cada habitación debe tener adultos y niños' })
+        }
+
+        const maxAdultos = Math.max(...habitaciones.map(h => parseInt(h.adultos) || 0))
+        const maxNinos = Math.max(...habitaciones.map(h => parseInt(h.ninos) || 0))
+
+        const rawDestino = (destino || '').toString().trim()
+        const primeraParte = rawDestino.split(',')[0].trim()
+        const textoBusqueda = primeraParte ? `%${primeraParte}%` : '%'
+
+        console.log('=== BÚSQUEDA DE HOSPEDAJE ===')
+        console.log('Destino:', destino)
+        console.log('Adultos:', maxAdultos, '| Niños:', maxNinos)
+
         const { rows } = await pool.query(`
             SELECT
                 s."ID_SERVICIO"                          AS id_servicio,
@@ -124,7 +173,7 @@ export const postBuscarHospedaje = async (req, res) => {
                     OR p."NOMBRE" ILIKE $1
                 )
                 AND hab."CAPACIDAD_ADULTO" >= $2
-                AND hab."CAPACIDAD_NINOS"  >= $3
+                AND hab."CAPACIDAD_NINOS" >= $3
             GROUP BY 
                 s."ID_SERVICIO", s."NOMBRE", u."NOMBRE", 
                 c."NOMBRE", p."NOMBRE", th."NOMBRE_TIPO"
@@ -133,34 +182,32 @@ export const postBuscarHospedaje = async (req, res) => {
             LIMIT 50
         `, [textoBusqueda, maxAdultos, maxNinos])
 
-        console.log('Hospedajes encontrados:', rows.length)
         if (rows.length === 0) {
-            console.log('⚠️ Sin resultados — verificar datos en BD')
+            console.log('⚠️ Sin resultados')
             return res.json([])
         }
 
-        const ids = rows.map(r => r.id_servicio)
-        console.log('IDs encontrados:', ids)
+        console.log(`✅ ${rows.length} hospedaje(s) encontrado(s)`)
 
-        // ── 2. Amenidades (tabla HOSPEDAJE_SERVICIO) ────────────────────────
+        const ids = rows.map(r => r.id_servicio)
+
         let amenidadesMap = {}
         try {
             const { rows: srvRows } = await pool.query(`
                 SELECT hs."ID_HOSPEDAJE" AS id_hospedaje, si."NOMBRE" AS nombre
                 FROM public."HOSPEDAJE_SERVICIO" hs
-                JOIN public."SERVICIO_INCLUIDO"  si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
+                JOIN public."SERVICIO_INCLUIDO" si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
                 WHERE hs."ID_HOSPEDAJE" = ANY($1)
             `, [ids])
+            
             srvRows.forEach(({ id_hospedaje, nombre }) => {
                 if (!amenidadesMap[id_hospedaje]) amenidadesMap[id_hospedaje] = []
                 amenidadesMap[id_hospedaje].push(nombre)
             })
-            console.log('Amenidades OK:', srvRows.length, 'registros')
         } catch (e) {
-            console.error('⚠️ Error en amenidades (no crítico):', e.message)
+            console.error('⚠️ Error en amenidades:', e.message)
         }
 
-        // ── 3. Imágenes (tabla IMAGEN_HOSPEDAJE — puede no existir aún) ─────
         let imagenesMap = {}
         try {
             const { rows: imgRows } = await pool.query(`
@@ -169,47 +216,50 @@ export const postBuscarHospedaje = async (req, res) => {
                 WHERE "ID_HOSPEDAJE" = ANY($1)
                 ORDER BY "ID_HOSPEDAJE", "ORDEN" ASC
             `, [ids])
+            
             imgRows.forEach(({ id_hospedaje, url }) => {
                 if (!imagenesMap[id_hospedaje]) imagenesMap[id_hospedaje] = []
                 imagenesMap[id_hospedaje].push(url)
             })
-            console.log('Imágenes OK:', imgRows.length, 'registros')
         } catch (e) {
-            console.error('⚠️ Error en imágenes (tabla puede no existir):', e.message)
-            // No es crítico — los hoteles se muestran sin foto
+            console.error('⚠️ Error en imágenes:', e.message)
         }
 
-        // ── 4. Respuesta ────────────────────────────────────────────────────
         const resultado = rows.map(r => ({
-            id_servicio:              r.id_servicio,
-            hotel:                    r.hotel,
-            // Limpieza de la cadena de ubicación para evitar "null" visibles
-            ubicacion:                [r.ubicacion_nombre, r.ciudad, r.pais].filter(Boolean).join(', '),
-            tipo_hospedaje:           r.tipo_hospedaje,
-            precio_min:               parseFloat(r.precio_min) || 0,
-            calificacion_promedio:    r.calificacion_promedio
-                                        ? parseFloat(r.calificacion_promedio)
-                                        : null,
-            total_resenas:            parseInt(r.total_resenas) || 0,
+            id_servicio: r.id_servicio,
+            hotel: r.hotel,
+            ubicacion: [r.ubicacion_nombre, r.ciudad, r.pais]
+                .filter(Boolean)
+                .join(', ') || 'Ubicación no disponible',
+            tipo_hospedaje: r.tipo_hospedaje,
+            precio_min: parseFloat(r.precio_min) || 0,
+            calificacion_promedio: r.calificacion_promedio 
+                ? parseFloat(r.calificacion_promedio) 
+                : null,
+            total_resenas: parseInt(r.total_resenas) || 0,
             habitaciones_disponibles: parseInt(r.habitaciones_disponibles) || 0,
-            amenidades:               amenidadesMap[r.id_servicio] || [],
-            imagen_portada:           imagenesMap[r.id_servicio]?.[0] || null,
-            imagenes:                 imagenesMap[r.id_servicio]   || [],
+            amenidades: amenidadesMap[r.id_servicio] || [],
+            imagen_portada: imagenesMap[r.id_servicio]?.[0] || null,
+            imagenes: imagenesMap[r.id_servicio] || [],
         }))
 
-        console.log('Enviando', resultado.length, 'hospedajes al frontend')
         res.json(resultado)
 
     } catch (err) {
-        console.error('SEARCH_ERROR CRÍTICO:', err.message)
-        console.error(err.stack)
-        res.status(500).json({ error: err.message })
+        console.error('SEARCH_ERROR:', err.message)
+        res.status(500).json({ error: 'Error en la búsqueda' })
     }
 }
 
 // GET /api/search/hospedaje/:id
 export const getDetalleHospedaje = async (req, res) => {
     const { id } = req.params
+    const hospedajeId = validateId(id)
+
+    if (!hospedajeId) {
+        return res.status(400).json({ error: 'ID inválido' })
+    }
+
     try {
         const pool = getPool()
 
@@ -228,17 +278,19 @@ export const getDetalleHospedaje = async (req, res) => {
                 hos."MASCOTAS",
                 hos."FUMAR",
                 hos."DESCRIPCION"
-            FROM public."SERVICIO"       s
-            JOIN public."HOSPEDAJE"      hos ON hos."ID_HOSPEDAJE"  = s."ID_SERVICIO"
-            JOIN public."TIPO_HOSPEDAJE" th  ON th."ID_TIPO"        = hos."ID_TIPO"
-            JOIN public."UBICACION"      u   ON u."ID_UBICACION"    = hos."ID_UBICACION"
-            JOIN public."CIUDAD"         c   ON c."ID_CIUDAD"       = u."ID_CIUDAD"
-            JOIN public."PAIS"           p   ON p."ID_PAIS"         = c."ID_PAIS"
-            JOIN public."PROVEEDOR"      pr  ON pr."ID_PROVEEDOR"   = s."ID_PROVEEDOR"
+            FROM public."SERVICIO" s
+            JOIN public."HOSPEDAJE" hos ON hos."ID_HOSPEDAJE" = s."ID_SERVICIO"
+            JOIN public."TIPO_HOSPEDAJE" th ON th."ID_TIPO" = hos."ID_TIPO"
+            JOIN public."UBICACION" u ON u."ID_UBICACION" = hos."ID_UBICACION"
+            JOIN public."CIUDAD" c ON c."ID_CIUDAD" = u."ID_CIUDAD"
+            JOIN public."PAIS" p ON p."ID_PAIS" = c."ID_PAIS"
+            JOIN public."PROVEEDOR" pr ON pr."ID_PROVEEDOR" = s."ID_PROVEEDOR"
             WHERE s."ID_SERVICIO" = $1
-        `, [id])
+        `, [hospedajeId])
 
-        if (!rows.length) return res.status(404).json({ error: 'No encontrado' })
+        if (!rows.length) {
+            return res.status(404).json({ error: 'Hospedaje no encontrado' })
+        }
 
         const { rows: habitaciones } = await pool.query(`
             SELECT
@@ -247,35 +299,35 @@ export const getDetalleHospedaje = async (req, res) => {
                 hab."CAPACIDAD_ADULTO" AS capacidad_adulto,
                 hab."CAPACIDAD_NINOS"  AS capacidad_ninos,
                 hab."PRECIO_NOCHE"     AS precio_noche
-            FROM public."HABITACION"      hab
+            FROM public."HABITACION" hab
             JOIN public."TIPO_HABITACION" tph ON tph."ID_TIPO_HABITACION" = hab."ID_TIPO_HABITACION"
             WHERE hab."ID_HOSPEDAJE" = $1
             ORDER BY hab."PRECIO_NOCHE" ASC
-        `, [id])
+        `, [hospedajeId])
 
         const { rows: imagenes } = await pool.query(`
             SELECT "URL", "ORDEN", "ALT_TEXT"
             FROM public."IMAGEN_HOSPEDAJE"
             WHERE "ID_HOSPEDAJE" = $1
             ORDER BY "ORDEN" ASC
-        `, [id])
+        `, [hospedajeId])
 
         const { rows: amenidades } = await pool.query(`
             SELECT si."NOMBRE"
             FROM public."HOSPEDAJE_SERVICIO" hs
             JOIN public."SERVICIO_INCLUIDO" si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
             WHERE hs."ID_HOSPEDAJE" = $1
-        `, [id])
+        `, [hospedajeId])
 
-        res.json({ 
-            ...rows[0], 
-            habitaciones, 
-            imagenes, 
-            amenidades: amenidades.map(a => a.NOMBRE) 
+        res.json({
+            ...rows[0],
+            habitaciones,
+            imagenes,
+            amenidades: amenidades.map(a => a.NOMBRE),
         })
 
     } catch (err) {
-        console.error('getDetalleHospedaje:', err.message)
-        res.status(500).json({ error: err.message })
+        console.error('getDetalleHospedaje ERROR:', err.message)
+        res.status(500).json({ error: 'Error al obtener detalles' })
     }
 }
