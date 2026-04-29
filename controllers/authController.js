@@ -3,10 +3,16 @@ import User from '../models/User.js'
 import { sendForgotPasswordEmail, sendPasswordResetSuccessEmail } from '../utils/emailService.js'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
+import { OAuth2Client } from 'google-auth-library'
 
 const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '7d' })
 }
+
+// Google OAuth client - using the same client_id from frontend
+const googleClient = new OAuth2Client(
+  '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com'
+)
 
 const authController = {
   // ✅ FUNCIÓN LOGIN (FALTABA)
@@ -54,7 +60,7 @@ const authController = {
   // ✅ FUNCIÓN REGISTER
   register: async (req, res) => {
     try {
-      const { nombre, email, password, confirmPassword } = req.body;
+      const { nombre, email, password, confirmPassword } = req.body
 
       // Validaciones
       if (!nombre || !email || !password || !confirmPassword) {
@@ -104,18 +110,76 @@ const authController = {
   // ✅ FUNCIÓN GOOGLE LOGIN
   googleLogin: async (req, res) => {
     try {
-      const { googleId, email, nombre } = req.body
+      const { credential } = req.body
 
-      if (!googleId || !email) {
-        return res.status(400).json({ message: 'Google ID y email son requeridos' })
+      // Debug: Log incoming request info
+      console.log('📨 Google Login Request:', {
+        headers: req.headers,
+        origin: req.get('origin'),
+        hasCredential: !!credential
+      })
+
+      // Validar que se recibió el token de credential
+      if (!credential) {
+        console.log('❌ No credential provided')
+        return res.status(400).json({ message: 'Token de Google no proporcionado' })
       }
 
+      // Obtener el origen de la solicitud para la verificación
+      const requestOrigin = req.get('origin') || req.headers.origin || ''
+      console.log('🔍 Request origin:', requestOrigin)
+
+      // Determinar el origen para la verificación de Google (try multiple approaches)
+      let originForVerification = 'http://localhost:5173' // default to localhost for development
+
+      // If request is from production, use production origin
+      if (requestOrigin.includes('hotelierfrontend-ka0o.onrender.com') ||
+          requestOrigin.includes('hotelierfronend-ka0o.onrender.com')) {
+        originForVerification = requestOrigin
+      } else if (requestOrigin && requestOrigin.startsWith('http://localhost')) {
+        originForVerification = requestOrigin
+      }
+
+console.log('🔐 Using origin for verification:', originForVerification)
+
+      // Verificar y decodificar el token de Google
+      // Try WITHOUT origin first (more flexible, works with localhost and production)
+      let ticket
+      try {
+        console.log('🔐 Intentando verificación sin origin...')
+        ticket = await googleClient.verifyIdToken({
+          idToken: credential,
+          audience: '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com'
+        })
+        console.log('✅ Verificación sin origin exitosa')
+      } catch (withoutOriginError) {
+        console.log('⚠️ Verificación sin origin falló, intentando con origin:', withoutOriginError.message)
+        // Fallback: try WITH origin
+        try {
+          ticket = await googleClient.verifyIdToken({
+            idToken: credential,
+            audience: '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com',
+            origin: originForVerification
+          })
+          console.log('✅ Verificación con origin exitosa')
+        } catch (withOriginError) {
+          console.error('❌ Ambas verificaciones fallaron:', withOriginError.message)
+          throw withOriginError
+        }
+      }
+
+      const payload = ticket.getPayload()
+      const googleId = payload.sub
+      const email = payload.email
+      const nombre = payload.name || email.split('@')[0]
+
+      // Buscar o crear usuario en la base de datos
       let user = await User.findOne({ email: email.toLowerCase() })
 
       if (!user) {
         // Crear nuevo usuario desde Google
         user = new User({
-          nombre: nombre || email.split('@')[0],
+          nombre: nombre,
           email: email.toLowerCase(),
           googleId,
           password: 'google_' + googleId // Contraseña dummy
@@ -140,11 +204,11 @@ const authController = {
       })
     } catch (error) {
       console.error('Error en Google login:', error)
-      res.status(500).json({ message: 'Error en servidor' })
+      res.status(400).json({ message: 'Token de Google inválido o expirado' })
     }
   },
 
-// ✅ FORGOT PASSWORD
+  // ✅ FORGOT PASSWORD
   forgotPassword: async (req, res) => {
     try {
       const { email } = req.body
@@ -155,7 +219,7 @@ const authController = {
 
       const user = await User.findOne({ email: email.toLowerCase() })
       if (!user) {
-        // Retornamos 200 por seguridad (evita enumeración de correos) 
+        // Retornamos 200 por seguridad (evita enumeración de correos)
         // y para evitar errores 404 confusos si el endpoint funciona.
         return res.json({ message: 'Si el email existe, recibirás un enlace' })
       }
@@ -244,7 +308,7 @@ const authController = {
         return res.status(400).json({ message: 'Token inválido o expirado' })
       }
 
-user.password = newPassword
+      user.password = newPassword
       user.resetToken = null
       user.resetTokenExpiry = null
       await user.save()
