@@ -10,6 +10,7 @@ import searchRoutes from './routes/searchRoutes.js'
 import userRoutes from './routes/userRoutes.js'
 import hospedajesRoutes from './routes/hospedajes.js'
 import catalogosRoutes from './routes/catalogos.js'
+import hospedajeDetalleRoutes from './routes/hospedajeDetalle.js'
 import errorHandler from './middleware/errorHandler.js'
 
 const app = express()
@@ -56,6 +57,7 @@ app.use('/api/search', searchRoutes)
 app.use('/api/user', userRoutes)
 app.use('/api/hospedajes', hospedajesRoutes)
 app.use('/api/catalogos', catalogosRoutes)
+app.use('/api/hospedaje', hospedajeDetalleRoutes)
 
 // Resto de la lógica del servidor...
 const borradores = new Map()

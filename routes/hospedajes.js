@@ -20,9 +20,9 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 const router = Router();
-const SERVER_URL                  = process.env.SERVER_URL || 'http://localhost:3000'
+const SERVER_URL                  = process.env.SERVER_URL || 'https://hotelierbackend-1.onrender.com'
 const ID_TIPO_SERVICIO_HOSPEDAJE  = parseInt(process.env.ID_TIPO_SERVICIO_HOSPEDAJE || '1')
-const ID_TIPO_UBICACION_HOTEL     = parseInt(process.env.ID_TIPO_UBICACION_HOTEL    || '1')
+const ID_TIPO_UBICACION_HOTEL     = parseInt(process.env.ID_TIPO_UBICACION_HOTEL    || '4')
 
 // ── Helpers ──────────────────────────────────────────────────────
 const requerido = (valor, campo) => {
@@ -366,16 +366,18 @@ router.get('/search/ubicaciones', async (req, res, next) => {
   const { q } = req.query;
   try {
     const { rows } = await db.query(
-      `SELECT 
-        u."ID_UBICACION" AS "id", 
-        u."ID_TIPO"      AS "id_tipo", 
-        u."NOMBRE"       AS "ubicacion", 
-        ci."NOMBRE"      AS "ciudad", 
-        pa."NOMBRE"      AS "pais"
+      `SELECT
+        u."ID_UBICACION" as id,
+        u."NOMBRE"       as ubicacion,
+        ci."NOMBRE"      as ciudad,
+        pa."NOMBRE"      as pais,
+        u."ID_TIPO"      as id_tipo,
+        tu."ICONO"       as icono
       FROM public."UBICACION" u
-      LEFT JOIN public."CIUDAD" ci ON ci."ID_CIUDAD" = u."ID_CIUDAD"
-      LEFT JOIN public."PAIS"   pa ON pa."ID_PAIS"   = ci."ID_PAIS"
-      WHERE u."NOMBRE" ILIKE $1 OR ci."NOMBRE" ILIKE $1
+      JOIN public."CIUDAD" ci ON u."ID_CIUDAD" = ci."ID_CIUDAD"
+      JOIN public."PAIS"   pa ON ci."ID_PAIS"   = pa."ID_PAIS"
+      JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
+      WHERE u."NOMBRE" ILIKE $1
       LIMIT 10`,
       [`%${q || ''}%`]
     );

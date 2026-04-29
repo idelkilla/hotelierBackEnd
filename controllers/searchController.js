@@ -4,34 +4,35 @@ import { getPool } from '../db.js'
 export const getUbicaciones = async (req, res) => {
     const { q } = req.query
     try {
+        // Validación temprana consistente
+        if (!q || q.trim() === '') return res.json([])
+
         const pool = getPool()
-        const searchText = `%${(q || '').trim()}%`
-        console.log(`🔍 Buscando ubicaciones con el término: "${searchText}"`);
+        const searchText = `%${q.trim()}%`
+        console.log(`🔍 Buscando ubicaciones: "${q.trim()}"`)
 
         const { rows } = await pool.query(`
             SELECT
-                u."ID_UBICACION" AS id,
-                u."NOMBRE"       AS ubicacion,
-                u."ID_TIPO"      AS id_tipo, 
-                COALESCE(c."NOMBRE", '') AS ciudad,
-                COALESCE(p."NOMBRE", '') AS pais
+                u."ID_UBICACION" as id,
+                u."NOMBRE"       as ubicacion,
+                c."NOMBRE"       as ciudad,
+                p."NOMBRE"       as pais,
+                u."ID_TIPO"      as id_tipo,
+                tu."ICONO"       as icono
             FROM public."UBICACION" u
-            LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
-            LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
-            WHERE (
-                COALESCE(u."NOMBRE", '') ILIKE $1 OR 
-                COALESCE(c."NOMBRE", '') ILIKE $1 OR 
-                COALESCE(p."NOMBRE", '') ILIKE $1
-            )
+            JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
+            JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
+            JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
+            WHERE u."NOMBRE" ILIKE $1
             ORDER BY u."NOMBRE"
             LIMIT 10
         `, [searchText])
         
-        console.log(`✅ Se encontraron ${rows.length} resultados.`);
+        console.log(`✅ ${rows.length} resultado(s) encontrado(s)`)
         res.json(rows)
     } catch (err) {
         console.error('❌ Error en getUbicaciones:', err.message)
-        res.status(500).json({ error: err.message, stack: err.stack })
+        res.status(500).json([]) // Consistente con getAeropuertos
     }
 }
 
@@ -43,25 +44,27 @@ export const getAeropuertos = async (req, res) => {
 
     try {
         const pool = getPool()
-        const searchText = `%${q}%`
+        const searchText = `%${q.trim()}%`
         const { rows } = await pool.query(`
             SELECT
-                u."ID_UBICACION" AS id,
-                u."NOMBRE"       AS ubicacion,
-                u."ID_TIPO"      AS id_tipo,
-                c."NOMBRE"       AS ciudad,
-                p."NOMBRE"       AS pais
+                u."ID_UBICACION" as id,
+                u."NOMBRE"       as ubicacion,
+                c."NOMBRE"       as ciudad,
+                p."NOMBRE"       as pais,
+                u."ID_TIPO"      as id_tipo,
+                tu."ICONO"       as icono
             FROM public."UBICACION" u
-            LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
-            LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
-            WHERE u."ID_TIPO" = 3
+            JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
+            JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
+            JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
+            WHERE u."ID_TIPO" = 1
               AND (u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
             ORDER BY u."NOMBRE"
             LIMIT 10
         `, [searchText])
         res.json(rows)
     } catch (err) {
-        console.error('getAeropuertos:', err.message)
+        console.error('❌ Error en getAeropuertos:', err.message)
         res.status(500).json([])
     }
 }
