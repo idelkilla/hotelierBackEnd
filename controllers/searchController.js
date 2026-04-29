@@ -3,13 +3,10 @@ import { getPool } from '../db.js'
 // GET /api/search/ubicaciones?q=texto
 export const getUbicaciones = async (req, res) => {
     const { q } = req.query
-    // Si no hay búsqueda, devolvemos array vacío rápido
-    if (!q || q.trim() === '') return res.json([]);
-
     try {
         const pool = getPool()
-        const searchText = `%${q.trim()}%`
-        console.log(`🔍 Buscando ubicaciones con: "${searchText}"`);
+        const searchText = `%${(q || '').trim()}%`
+        console.log(`🔍 Buscando ubicaciones con el término: "${searchText}"`);
 
         const { rows } = await pool.query(`
             SELECT
@@ -21,14 +18,20 @@ export const getUbicaciones = async (req, res) => {
             FROM public."UBICACION" u
             LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
             LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
-            WHERE (u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
+            WHERE (
+                COALESCE(u."NOMBRE", '') ILIKE $1 OR 
+                COALESCE(c."NOMBRE", '') ILIKE $1 OR 
+                COALESCE(p."NOMBRE", '') ILIKE $1
+            )
             ORDER BY u."NOMBRE"
             LIMIT 10
         `, [searchText])
+        
+        console.log(`✅ Se encontraron ${rows.length} resultados.`);
         res.json(rows)
     } catch (err) {
-        console.error('getUbicaciones:', err.message)
-        res.status(500).json([])
+        console.error('❌ Error en getUbicaciones:', err.message)
+        res.status(500).json({ error: err.message, stack: err.stack })
     }
 }
 

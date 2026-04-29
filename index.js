@@ -30,8 +30,8 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
   'http://localhost:5175', // Agregado por si Vite cambia de puerto
-  'https://hotelierfrontend-ka0o.onrender.com',
-  'https://hotelierfronend-ka0o.onrender.com', // Por si acaso existe el typo sin 't'
+  'https://hotelierfrontend-ka0o.onrender.com', // Dominio con 't'
+  'https://hotelierfronend-ka0o.onrender.com',  // Dominio sin 't'
   process.env.FRONTEND_URL
 ].filter(Boolean).map(url => url.replace(/\/$/, ''));
 
@@ -42,10 +42,8 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// 3. TERCERO: Parche para Preflight (Fix del PathError)
-// En Express 5, usamos la sintaxis de parámetro nombrado para capturar todas las rutas.
-// Pasamos corsOptions para mantener la consistencia con las credenciales.
-app.options('{*path}', cors(corsOptions));
+// 3. TERCERO: Preflight para todas las rutas (Sintaxis Express 5)
+app.options('{*path}', cors());
 
 // 4. CUARTO: Parsers y Rutas Estáticas
 app.use(express.json())
