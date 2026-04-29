@@ -117,10 +117,32 @@ const authController = {
         return res.status(400).json({ message: 'Token de Google no proporcionado' })
       }
 
-      // Verificar y decodificar el token de Google
+      // Obtener el origen de la solicitud para la verificación
+      const requestOrigin = req.get('origin') || req.headers.origin;
+      const allowedOrigins = [
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:5174',
+        'http://localhost:5175',
+        'https://hotelierfrontend-ka0o.onrender.com',
+        'https://hotelierfronend-ka0o.onrender.com'
+      ];
+      
+      // Determinar el origen para la verificación de Google
+      let originForVerification = 'https://hotelierfrontend-ka0o.onrender.com'; // default production
+      if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+        originForVerification = requestOrigin;
+      } else if (requestOrigin && requestOrigin.includes('localhost')) {
+        originForVerification = 'http://localhost:5173'; // default localdev
+      }
+
+// Verificar y decodificar el token de Google
+      // Incluir origin para evitar errores de verificación con Google Identity Services (new)
       const ticket = await googleClient.verifyIdToken({
         idToken: credential,
-        audience: '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com'
+        audience: '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com',
+        origin: originForVerification
       })
 
       const payload = ticket.getPayload()
