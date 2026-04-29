@@ -13,23 +13,23 @@ export const getProfile = async (req, res) => {
           u."CORREO_ELECTRONICO" AS email, 
           p."NOMBRE_COMPLETO" AS nombre_completo, 
           p."APELLIDOS" AS apellidos, 
-          p."NUM_VIAJERO_CONOCIDO" AS tsa_id, 
-          p."CONTACTO_EMERGENCIA_NOMBRE" AS emergencia_nombre, 
-          p."CONTACTO_EMERGENCIA_TEL" AS emergencia_tel, 
+          p."NUM_VIAJERO_CONOCIDO" AS num_viajero_conocido, 
+          p."CONTACTO_EMERGENCIA_NOMBRE" AS contacto_emergencia_nombre, 
+          p."CONTACTO_EMERGENCIA_TEL" AS contacto_emergencia_tel, 
           db."FECHA_NACIMIENTO" AS fecha_nacimiento, 
           db."TIPO_SEXO" AS genero, 
-          db."SANGRE" AS tipo_sangre, 
-          db."ESTATURA" AS estatura, 
-          db."PESO" AS peso, 
+          db."SANGRE" AS "SANGRE", 
+          db."ESTATURA" AS "ESTATURA", 
+          db."PESO" AS "PESO", 
           c."ESTADO_CLIENTE" AS status_cuenta, 
           m."PUNTOS_FIDELIDAD" AS puntos, 
           nm."NOMBRE_NIVEL" AS nivel_membresia 
-      FROM "USUARIO" u 
-      JOIN "PERSONA" p ON u."ID_PERSONA" = p."ID_PERSONA" 
-      LEFT JOIN "DATOS_BIOGRAFICOS" db ON p."ID_PERSONA" = db."ID_PERSONA" 
-      LEFT JOIN "CLIENTE" c ON p."ID_PERSONA" = c."ID_CLIENTE" 
-      LEFT JOIN "MIEMBRO" m ON c."ID_CLIENTE" = m."ID_CLIENTE" 
-      LEFT JOIN "NIVEL_MEMBRESIA" nm ON m."ID_NIVEL" = nm."ID_NIVEL" 
+      FROM public."USUARIO" u 
+      LEFT JOIN public."PERSONA" p ON u."ID_PERSONA" = p."ID_PERSONA" 
+      LEFT JOIN public."DATOS_BIOGRAFICOS" db ON p."ID_PERSONA" = db."ID_PERSONA" 
+      LEFT JOIN public."CLIENTE" c ON p."ID_PERSONA" = c."ID_CLIENTE" 
+      LEFT JOIN public."MIEMBRO" m ON c."ID_CLIENTE" = m."ID_CLIENTE" 
+      LEFT JOIN public."NIVEL_MEMBRESIA" nm ON m."ID_NIVEL" = nm."ID_NIVEL" 
       WHERE u."ID_USUARIO" = $1;
     `;
 

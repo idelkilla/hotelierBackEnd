@@ -35,15 +35,18 @@ const allowedOrigins = [
   process.env.FRONTEND_URL
 ].filter(Boolean).map(url => url.replace(/\/$/, ''));
 
-app.use(cors({
+const corsOptions = {
   origin: allowedOrigins,
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 
 // 3. TERCERO: Parche para Preflight (Fix del PathError)
-// Cambiamos a '*' porque es el estándar universal. Si usas '{*path}' en Express 4, 
-// las peticiones OPTIONS fallarán y el navegador bloqueará la búsqueda.
-app.options('{*path}', cors());
+// En Express 5, usamos la sintaxis de parámetro nombrado para capturar todas las rutas.
+// Pasamos corsOptions para mantener la consistencia con las credenciales.
+app.options('{*path}', cors(corsOptions));
+
 // 4. CUARTO: Parsers y Rutas Estáticas
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
