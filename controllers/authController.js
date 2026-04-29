@@ -1,205 +1,251 @@
+import crypto from 'crypto'
+import User from '../models/User.js'
+import { sendForgotPasswordEmail, sendPasswordResetSuccessEmail } from '../utils/emailService.js'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
-import { OAuth2Client } from 'google-auth-library'
-import { getPool } from '../db.js'
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
-
-if (!process.env.JWT_SECRET) {
-  throw new Error('JWT_SECRET no definido')
+const generateToken = (userId) => {
+  return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '7d' })
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const authController = {
+  // ✅ FUNCIÓN LOGIN (FALTABA)
+  login: async (req, res) => {
+    try {
+      const { email, password } = req.body
 
-export const googleLogin = async (req, res) => {
-  const { credential } = req.body
-
-  if (!credential) {
-    return res.status(400).json({ message: 'No se recibió credencial' })
-  }
-
-  try {
-    const ticket = await client.verifyIdToken({
-      idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    })
-
-    const { sub: google_id, email, name, picture } = ticket.getPayload()
-    const pool = getPool()
-
-    let result = await pool.query(
-      `SELECT * FROM "USUARIO" WHERE "GOOGLE_ID" = $1`,
-      [google_id],
-    )
-
-    let user
-
-    if (result.rowCount > 0) {
-      user = result.rows[0]
-    } else {
-      const emailCheck = await pool.query(
-        `SELECT * FROM "USUARIO" WHERE "CORREO_ELECTRONICO" = $1`,
-        [email],
-      )
-
-      if (emailCheck.rowCount > 0) {
-        const existingUser = emailCheck.rows[0]
-
-        if (existingUser.GOOGLE_ID && existingUser.GOOGLE_ID !== google_id) {
-          return res.status(400).json({
-            message: 'Este email está asociado a otra cuenta de Google',
-          })
-        }
-
-        if (!existingUser.GOOGLE_ID) {
-          await pool.query(
-            `UPDATE "USUARIO" SET "GOOGLE_ID" = $1 WHERE "ID_USUARIO" = $2`,
-            [google_id, existingUser.ID_USUARIO],
-          )
-        }
-
-        user = existingUser
-      } else {
-        const newUser = await pool.query(
-          `INSERT INTO "USUARIO" ("USUARIO", "CORREO_ELECTRONICO", "GOOGLE_ID")
-           VALUES ($1, $2, $3)
-           RETURNING "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"`,
-          [name, email, google_id],
-        )
-        user = newUser.rows[0]
+      // Validaciones
+      if (!email || !password) {
+        return res.status(400).json({ message: 'Email y contraseña son requeridos' })
       }
-    }
 
-    const token = jwt.sign(
-      { id: user.ID_USUARIO, email: user.CORREO_ELECTRONICO },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' },
-    )
+      // Buscar usuario
+      const user = await User.findOne({ email: email.toLowerCase() })
 
-    res.json({
-      token,
-      user: {
-        id: user.ID_USUARIO,
-        username: user.USUARIO,
-        email: user.CORREO_ELECTRONICO,
-        googleUser: true,
-        picture,
-      },
-    })
-  } catch (error) {
-    console.error('GOOGLE_AUTH_ERROR:', error)
-    res.status(400).json({ message: 'Error en autenticación de Google' })
-  }
-}
+      if (!user) {
+        return res.status(401).json({ message: 'Credenciales inválidas' })
+      }
 
-export const loginUser = async (req, res) => {
-  const { usuarioOrEmail, password } = req.body
+      // Comparar contraseña
+      const isPasswordValid = await user.comparePassword(password)
+      if (!isPasswordValid) {
+        return res.status(401).json({ message: 'Credenciales inválidas' })
+      }
 
-  if (!usuarioOrEmail || !password) {
-    return res.status(400).json({ message: 'Campos incompletos' })
-  }
+      // Generar token
+      const token = generateToken(user._id)
 
-  try {
-    const pool = getPool()
-
-    const result = await pool.query(
-      `SELECT * FROM "USUARIO"
-       WHERE ("CORREO_ELECTRONICO" = $1 OR "USUARIO" = $1)`,
-      [usuarioOrEmail],
-    )
-
-    if (result.rowCount === 0) {
-      return res.status(401).json({ message: 'Credenciales inválidas' })
-    }
-
-    const user = result.rows[0]
-
-    if (!user.CONTRASENA) {
-      return res.status(400).json({ message: 'Usa login con Google' })
-    }
-
-    const validPassword = await bcrypt.compare(password, user.CONTRASENA)
-
-    if (!validPassword) {
-      return res.status(401).json({ message: 'Credenciales inválidas' })
-    }
-
-    const token = jwt.sign(
-      { id: user.ID_USUARIO, email: user.CORREO_ELECTRONICO },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' },
-    )
-
-    res.json({
-      token,
-      user: {
-        id: user.ID_USUARIO,
-        username: user.USUARIO,
-        email: user.CORREO_ELECTRONICO,
-      },
-    })
-  } catch (error) {
-    console.error('LOGIN_ERROR:', error)
-    res.status(500).json({ message: 'Error en servidor' })
-  }
-}
-
-export const registerUser = async (req, res) => {
-  const { username, email, password } = req.body
-
-  if (!username || !email || !password) {
-    return res.status(400).json({ message: 'Campos incompletos' })
-  }
-
-  if (!EMAIL_REGEX.test(email)) {
-    return res.status(400).json({ message: 'Email inválido' })
-  }
-
-  if (password.length < 6) {
-    return res.status(400).json({ message: 'Password muy corta' })
-  }
-
-  try {
-    const pool = getPool()
-    const hashed = await bcrypt.hash(password, 12)
-
-    const result = await pool
-      .query(
-        `INSERT INTO "USUARIO"
-         ("USUARIO", "CORREO_ELECTRONICO", "CONTRASENA")
-         VALUES ($1, $2, $3)
-         RETURNING "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"`,
-        [username, email, hashed],
-      )
-      .catch((err) => {
-        if (err.code === '23505') {
-          return null
+      res.json({
+        message: 'Login exitoso',
+        token,
+        user: {
+          id: user._id,
+          nombre: user.nombre,
+          email: user.email,
+          telefono: user.telefono
         }
-        throw err
+      })
+    } catch (error) {
+      console.error('Error en login:', error)
+      res.status(500).json({ message: 'Error en servidor' })
+    }
+  },
+
+  // ✅ FUNCIÓN REGISTER
+  register: async (req, res) => {
+    try {
+      const { nombre, email, password, confirmPassword } = req.body;
+
+      // Validaciones
+      if (!nombre || !email || !password || !confirmPassword) {
+        return res.status(400).json({ message: 'Todos los campos son requeridos' })
+      }
+
+      if (password !== confirmPassword) {
+        return res.status(400).json({ message: 'Las contraseñas no coinciden' })
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' })
+      }
+
+      // Verificar si el usuario ya existe
+      const userExists = await User.findOne({ email: email.toLowerCase() })
+      if (userExists) {
+        return res.status(400).json({ message: 'El email ya está registrado' })
+      }
+
+      // Crear nuevo usuario
+      const newUser = new User({
+        nombre,
+        email: email.toLowerCase(),
+        password
       })
 
-    if (!result) {
-      return res.status(409).json({ code: 'EMAIL_OR_USER_TAKEN' })
+      await newUser.save()
+
+      const token = generateToken(newUser._id)
+
+      res.status(201).json({
+        message: 'Usuario registrado exitosamente',
+        token,
+        user: {
+          id: newUser._id,
+          nombre: newUser.nombre,
+          email: newUser.email
+        }
+      })
+    } catch (error) {
+      console.error('Error en register:', error)
+      res.status(500).json({ message: 'Error en servidor' })
     }
+  },
 
-    const user = result.rows[0]
+  // ✅ FUNCIÓN GOOGLE LOGIN
+  googleLogin: async (req, res) => {
+    try {
+      const { googleId, email, nombre } = req.body
 
-    const token = jwt.sign(
-      { id: user.ID_USUARIO, email: user.CORREO_ELECTRONICO },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' },
-    )
+      if (!googleId || !email) {
+        return res.status(400).json({ message: 'Google ID y email son requeridos' })
+      }
 
-    res.status(201).json({
-      token,
-      user: {
-        id: user.ID_USUARIO,
-        username: user.USUARIO,
-        email: user.CORREO_ELECTRONICO,
-      },
-    })
-  } catch (error) {
-    console.error('REGISTER_ERROR:', error)
-    res.status(500).json({ code: 'SERVER_ERROR' })
+      let user = await User.findOne({ email: email.toLowerCase() })
+
+      if (!user) {
+        // Crear nuevo usuario desde Google
+        user = new User({
+          nombre: nombre || email.split('@')[0],
+          email: email.toLowerCase(),
+          googleId,
+          password: 'google_' + googleId // Contraseña dummy
+        })
+        await user.save()
+      } else if (!user.googleId) {
+        // Vincular Google a cuenta existente
+        user.googleId = googleId
+        await user.save()
+      }
+
+      const token = generateToken(user._id)
+
+      res.json({
+        message: 'Login con Google exitoso',
+        token,
+        user: {
+          id: user._id,
+          nombre: user.nombre,
+          email: user.email
+        }
+      })
+    } catch (error) {
+      console.error('Error en Google login:', error)
+      res.status(500).json({ message: 'Error en servidor' })
+    }
+  },
+
+  // ✅ FORGOT PASSWORD
+  forgotPassword: async (req, res) => {
+    try {
+      const { email } = req.body
+
+      if (!email) {
+        return res.status(400).json({ message: 'Email es requerido' })
+      }
+
+      const user = await User.findOne({ email: email.toLowerCase() })
+      if (!user) {
+        // Retornamos 200 por seguridad (evita enumeración de correos) 
+        // y para evitar errores 404 confusos si el endpoint funciona.
+        return res.json({ message: 'Si el email existe, recibirás un enlace' })
+      }
+
+      const resetToken = user.generateResetToken()
+      await user.save()
+
+      await sendForgotPasswordEmail(user.email, resetToken, user.nombre)
+
+      res.json({
+        message: 'Enlace de recuperación enviado al correo'
+      })
+    } catch (error) {
+      console.error('Error en forgotPassword:', error)
+      res.status(500).json({ message: 'Error al procesar solicitud' })
+    }
+  },
+
+  // ✅ VERIFY RESET TOKEN
+  verifyResetToken: async (req, res) => {
+    try {
+      const { token } = req.params
+
+      const hashedToken = crypto
+        .createHash('sha256')
+        .update(token)
+        .digest('hex')
+
+      const user = await User.findOne({
+        resetToken: hashedToken,
+        resetTokenExpiry: { $gt: new Date() }
+      })
+
+      if (!user) {
+        return res.status(400).json({ message: 'Token inválido o expirado' })
+      }
+
+      res.json({ message: 'Token válido', email: user.email })
+    } catch (error) {
+      console.error('Error en verifyResetToken:', error)
+      res.status(500).json({ message: 'Error al verificar token' })
+    }
+  },
+
+  // ✅ RESET PASSWORD
+  resetPassword: async (req, res) => {
+    try {
+      const { token, newPassword, confirmPassword } = req.body
+
+      if (!token || !newPassword || !confirmPassword) {
+        return res.status(400).json({ message: 'Todos los campos son requeridos' })
+      }
+
+      if (newPassword !== confirmPassword) {
+        return res.status(400).json({ message: 'Las contraseñas no coinciden' })
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          message: 'La contraseña debe tener al menos 6 caracteres'
+        })
+      }
+
+      const hashedToken = crypto
+        .createHash('sha256')
+        .update(token)
+        .digest('hex')
+
+      const user = await User.findOne({
+        resetToken: hashedToken,
+        resetTokenExpiry: { $gt: new Date() }
+      })
+
+      if (!user) {
+        return res.status(400).json({ message: 'Token inválido o expirado' })
+      }
+
+      user.password = newPassword
+      user.resetToken = null
+      user.resetTokenExpiry = null
+      await user.save()
+
+      await sendPasswordResetSuccessEmail(user.email, user.nombre)
+
+      res.json({ message: 'Contraseña actualizada exitosamente' })
+    } catch (error) {
+      console.error('Error en resetPassword:', error)
+      res.status(500).json({ message: 'Error al actualizar contraseña' })
+    }
   }
 }
+
+export default authController

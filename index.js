@@ -14,15 +14,15 @@ import hospedajeDetalleRoutes from './routes/hospedajeDetalle.js'
 import errorHandler from './middleware/errorHandler.js'
 
 const app = express()
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // 1. PRIMERO: Headers de Seguridad para Google Auth (COOP/COEP)
 app.use((req, res, next) => {
-  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  next();
-});
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none')
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none')
+  next()
+})
 
 // 2. SEGUNDO: Configuración de CORS
 const allowedOrigins = [
@@ -30,20 +30,20 @@ const allowedOrigins = [
   'http://localhost:5174',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
-  'http://localhost:5175', // Agregado por si Vite cambia de puerto
-  'https://hotelierfrontend-ka0o.onrender.com', // Dominio con 't'
-  'https://hotelierfronend-ka0o.onrender.com',  // Dominio sin 't'
-  process.env.FRONTEND_URL
-].filter(Boolean).map(url => url.replace(/\/$/, ''));
+  'http://localhost:5175',
+  'https://hotelierfrontend-ka0o.onrender.com',
+  'https://hotelierfronend-ka0o.onrender.com',
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : [])
+].filter(Boolean).map(url => url.replace(/\/$/, ''))
 
 const corsOptions = {
   origin: allowedOrigins,
   credentials: true
-};
+}
 
-app.use(cors(corsOptions));
+app.use(cors(corsOptions))
 
-// 3. TERCERO: Preflight para todas las rutas (Sintaxis Express 5)
+// 3. TERCERO: Preflight para todas las rutas
 app.options('{*path}', cors());
 
 // 4. CUARTO: Parsers y Rutas Estáticas
@@ -59,12 +59,17 @@ app.use('/api/hospedajes', hospedajesRoutes)
 app.use('/api/catalogos', catalogosRoutes)
 app.use('/api/hospedaje', hospedajeDetalleRoutes)
 
-// Resto de la lógica del servidor...
+// Borrador de hospedajes
 const borradores = new Map()
 app.post('/api/hospedajes/borrador', (req, res) => {
   const id = Date.now().toString()
   borradores.set(id, req.body)
   res.json({ id, message: 'Borrador guardado.' })
+})
+
+// Ruta de prueba
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK' })
 })
 
 app.get('/', (req, res) => {
@@ -79,7 +84,7 @@ const start = async () => {
       throw new Error('JWT_SECRET no definido en .env')
     }
     await connectDB()
-    const PORT = process.env.PORT || 10000;
+    const PORT = process.env.PORT || 10000
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Backend listo en el puerto ${PORT}`)
     })
