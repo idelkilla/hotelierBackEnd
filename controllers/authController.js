@@ -144,7 +144,7 @@ const authController = {
     }
   },
 
-  // ✅ FORGOT PASSWORD
+// ✅ FORGOT PASSWORD
   forgotPassword: async (req, res) => {
     try {
       const { email } = req.body
@@ -163,14 +163,25 @@ const authController = {
       const resetToken = user.generateResetToken()
       await user.save()
 
-      await sendForgotPasswordEmail(user.email, resetToken, user.nombre)
+      // Enviar email - manejar error gracefully
+      try {
+        await sendForgotPasswordEmail(user.email, resetToken, user.nombre)
+      } catch (emailError) {
+        // Log error internamente pero NO fallar la solicitud
+        // El token ya está generado, el usuario puede intentar de nuevo
+        // o el admin puede reenviar manualmente
+        console.error('❌ Error enviando email de recuperación:', emailError.message)
+        // No lanzamos el error - continuamos y retornamos éxito de todas formas
+        // Esto evita que usuarios maliciosos descubran qué emails están registrados
+      }
 
       res.json({
-        message: 'Enlace de recuperación enviado al correo'
+        message: 'Si el email existe, recibirás un enlace de recuperación'
       })
     } catch (error) {
       console.error('Error en forgotPassword:', error)
-      res.status(500).json({ message: 'Error al procesar solicitud' })
+      // Por seguridad, siempre retornamos mensaje positivo
+      res.json({ message: 'Si el email existe, recibirás un enlace de recuperación' })
     }
   },
 
@@ -233,12 +244,18 @@ const authController = {
         return res.status(400).json({ message: 'Token inválido o expirado' })
       }
 
-      user.password = newPassword
+user.password = newPassword
       user.resetToken = null
       user.resetTokenExpiry = null
       await user.save()
 
-      await sendPasswordResetSuccessEmail(user.email, user.nombre)
+      // Enviar email de confirmación - manejar error graceful
+      try {
+        await sendPasswordResetSuccessEmail(user.email, user.nombre)
+      } catch (emailError) {
+        // Log error pero NO fallar - la contraseña ya fue cambiada
+        console.error('❌ Error enviando email de confirmación:', emailError.message)
+      }
 
       res.json({ message: 'Contraseña actualizada exitosamente' })
     } catch (error) {
