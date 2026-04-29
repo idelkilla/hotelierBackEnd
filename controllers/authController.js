@@ -3,10 +3,16 @@ import User from '../models/User.js'
 import { sendForgotPasswordEmail, sendPasswordResetSuccessEmail } from '../utils/emailService.js'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
+import { OAuth2Client } from 'google-auth-library'
 
 const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '7d' })
 }
+
+// Google OAuth client - using the same client_id from frontend
+const googleClient = new OAuth2Client(
+  '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com'
+)
 
 const authController = {
   // ✅ FUNCIÓN LOGIN (FALTABA)
@@ -101,21 +107,34 @@ const authController = {
     }
   },
 
-  // ✅ FUNCIÓN GOOGLE LOGIN
+// ✅ FUNCIÓN GOOGLE LOGIN
   googleLogin: async (req, res) => {
     try {
-      const { googleId, email, nombre } = req.body
+      const { credential } = req.body
 
-      if (!googleId || !email) {
-        return res.status(400).json({ message: 'Google ID y email son requeridos' })
+      // Validar que se recibió el token de credential
+      if (!credential) {
+        return res.status(400).json({ message: 'Token de Google no proporcionado' })
       }
 
+      // Verificar y decodificar el token de Google
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com'
+      })
+
+      const payload = ticket.getPayload()
+      const googleId = payload.sub
+      const email = payload.email
+      const nombre = payload.name || email.split('@')[0]
+
+      // Buscar o crear usuario en la base de datos
       let user = await User.findOne({ email: email.toLowerCase() })
 
       if (!user) {
         // Crear nuevo usuario desde Google
         user = new User({
-          nombre: nombre || email.split('@')[0],
+          nombre: nombre,
           email: email.toLowerCase(),
           googleId,
           password: 'google_' + googleId // Contraseña dummy
@@ -140,7 +159,7 @@ const authController = {
       })
     } catch (error) {
       console.error('Error en Google login:', error)
-      res.status(500).json({ message: 'Error en servidor' })
+      res.status(400).json({ message: 'Token de Google inválido o expirado' })
     }
   },
 
