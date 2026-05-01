@@ -133,6 +133,8 @@ const authController = {
       }
 
       const payload = ticket.getPayload()
+      console.log('📧 Google payload:', { email: payload.email, name: payload.name, sub: payload.sub })
+      
       const googleId = payload.sub
       const email = payload.email
       const nombre = payload.name || email.split('@')[0]
