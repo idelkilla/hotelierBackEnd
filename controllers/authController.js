@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import User from '../models/User.js'
+import { getPool } from '../db.js'
 import { sendForgotPasswordEmail, sendPasswordResetSuccessEmail } from '../utils/emailService.js'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
@@ -9,46 +9,50 @@ const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '7d' })
 }
 
-// Google OAuth client - using the same client_id from frontend
-const googleClient = new OAuth2Client(
-  '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com'
-)
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com')
+  .trim().replace(/['"]/g, '')
+
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID)
 
 const authController = {
-  // ✅ FUNCIÓN LOGIN (FALTABA)
+
+  // ✅ LOGIN
   login: async (req, res) => {
     try {
       const { email, password } = req.body
 
-      // Validaciones
-      if (!email || !password) {
+      if (!email || !password)
         return res.status(400).json({ message: 'Email y contraseña son requeridos' })
-      }
 
-      // Buscar usuario
-      const user = await User.findOne({ email: email.toLowerCase() })
+      const db = getPool()
+      const { rows } = await db.query(
+        `SELECT "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO", "CONTRASENA", "GOOGLE_ID"
+         FROM public."USUARIO"
+         WHERE "CORREO_ELECTRONICO" = $1`,
+        [email.toLowerCase()]
+      )
+      const user = rows[0]
 
-      if (!user) {
+      if (!user)
         return res.status(401).json({ message: 'Credenciales inválidas' })
-      }
 
-      // Comparar contraseña
-      const isPasswordValid = await user.comparePassword(password)
-      if (!isPasswordValid) {
+      // Si la cuenta es de Google y no tiene contraseña
+      if (!user.CONTRASENA && user.GOOGLE_ID)
+        return res.status(401).json({ message: 'Esta cuenta usa Google para iniciar sesión' })
+
+      const isPasswordValid = await bcrypt.compare(password, user.CONTRASENA)
+      if (!isPasswordValid)
         return res.status(401).json({ message: 'Credenciales inválidas' })
-      }
 
-      // Generar token
-      const token = generateToken(user._id)
+      const token = generateToken(user.ID_USUARIO)
 
       res.json({
         message: 'Login exitoso',
         token,
         user: {
-          id: user._id,
-          nombre: user.nombre,
-          email: user.email,
-          telefono: user.telefono
+          id: user.ID_USUARIO,
+          nombre: user.USUARIO,
+          email: user.CORREO_ELECTRONICO
         }
       })
     } catch (error) {
@@ -57,48 +61,47 @@ const authController = {
     }
   },
 
-  // ✅ FUNCIÓN REGISTER
+  // ✅ REGISTER
   register: async (req, res) => {
     try {
       const { nombre, email, password, confirmPassword } = req.body
 
-      // Validaciones
-      if (!nombre || !email || !password || !confirmPassword) {
+      if (!nombre || !email || !password || !confirmPassword)
         return res.status(400).json({ message: 'Todos los campos son requeridos' })
-      }
 
-      if (password !== confirmPassword) {
+      if (password !== confirmPassword)
         return res.status(400).json({ message: 'Las contraseñas no coinciden' })
-      }
 
-      if (password.length < 6) {
+      if (password.length < 6)
         return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' })
-      }
 
-      // Verificar si el usuario ya existe
-      const userExists = await User.findOne({ email: email.toLowerCase() })
-      if (userExists) {
+      const db = getPool()
+
+      const { rows: existing } = await db.query(
+        `SELECT "ID_USUARIO" FROM public."USUARIO" WHERE "CORREO_ELECTRONICO" = $1`,
+        [email.toLowerCase()]
+      )
+      if (existing.length > 0)
         return res.status(400).json({ message: 'El email ya está registrado' })
-      }
 
-      // Crear nuevo usuario
-      const newUser = new User({
-        nombre,
-        email: email.toLowerCase(),
-        password
-      })
+      const hashedPassword = await bcrypt.hash(password, 10)
 
-      await newUser.save()
-
-      const token = generateToken(newUser._id)
+      const { rows } = await db.query(
+        `INSERT INTO public."USUARIO" ("USUARIO", "CORREO_ELECTRONICO", "CONTRASENA")
+         VALUES ($1, $2, $3)
+         RETURNING "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"`,
+        [nombre, email.toLowerCase(), hashedPassword]
+      )
+      const newUser = rows[0]
+      const token = generateToken(newUser.ID_USUARIO)
 
       res.status(201).json({
         message: 'Usuario registrado exitosamente',
         token,
         user: {
-          id: newUser._id,
-          nombre: newUser.nombre,
-          email: newUser.email
+          id: newUser.ID_USUARIO,
+          nombre: newUser.USUARIO,
+          email: newUser.CORREO_ELECTRONICO
         }
       })
     } catch (error) {
@@ -107,65 +110,26 @@ const authController = {
     }
   },
 
-  // ✅ FUNCIÓN GOOGLE LOGIN
+  // ✅ GOOGLE LOGIN
   googleLogin: async (req, res) => {
     try {
       const { credential } = req.body
 
-      // Debug: Log incoming request info
-      console.log('📨 Google Login Request:', {
-        headers: req.headers,
-        origin: req.get('origin'),
-        hasCredential: !!credential
-      })
-
-      // Validar que se recibió el token de credential
-      if (!credential) {
-        console.log('❌ No credential provided')
+      if (!credential)
         return res.status(400).json({ message: 'Token de Google no proporcionado' })
-      }
 
-      // Obtener el origen de la solicitud para la verificación
-      const requestOrigin = req.get('origin') || req.headers.origin || ''
-      console.log('🔍 Request origin:', requestOrigin)
-
-      // Determinar el origen para la verificación de Google (try multiple approaches)
-      let originForVerification = 'http://localhost:5173' // default to localhost for development
-
-      // If request is from production, use production origin
-      if (requestOrigin.includes('hotelierfrontend-ka0o.onrender.com') ||
-          requestOrigin.includes('hotelierfronend-ka0o.onrender.com')) {
-        originForVerification = requestOrigin
-      } else if (requestOrigin && requestOrigin.startsWith('http://localhost')) {
-        originForVerification = requestOrigin
-      }
-
-console.log('🔐 Using origin for verification:', originForVerification)
-
-      // Verificar y decodificar el token de Google
-      // Try WITHOUT origin first (more flexible, works with localhost and production)
       let ticket
       try {
-        console.log('🔐 Intentando verificación sin origin...')
         ticket = await googleClient.verifyIdToken({
           idToken: credential,
-          audience: '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com'
+          audience: GOOGLE_CLIENT_ID
         })
-        console.log('✅ Verificación sin origin exitosa')
-      } catch (withoutOriginError) {
-        console.log('⚠️ Verificación sin origin falló, intentando con origin:', withoutOriginError.message)
-        // Fallback: try WITH origin
-        try {
-          ticket = await googleClient.verifyIdToken({
-            idToken: credential,
-            audience: '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com',
-            origin: originForVerification
-          })
-          console.log('✅ Verificación con origin exitosa')
-        } catch (withOriginError) {
-          console.error('❌ Ambas verificaciones fallaron:', withOriginError.message)
-          throw withOriginError
-        }
+      } catch (verifyError) {
+        console.error('❌ Verificación Google falló:', verifyError.message)
+        return res.status(400).json({
+          message: 'Token de Google inválido o expirado',
+          detail: verifyError.message
+        })
       }
 
       const payload = ticket.getPayload()
@@ -173,78 +137,100 @@ console.log('🔐 Using origin for verification:', originForVerification)
       const email = payload.email
       const nombre = payload.name || email.split('@')[0]
 
-      // Buscar o crear usuario en la base de datos
-      let user = await User.findOne({ email: email.toLowerCase() })
+      const db = getPool()
+
+      const { rows: existing } = await db.query(
+        `SELECT "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO", "GOOGLE_ID"
+         FROM public."USUARIO"
+         WHERE "CORREO_ELECTRONICO" = $1`,
+        [email.toLowerCase()]
+      )
+      let user = existing[0]
 
       if (!user) {
         // Crear nuevo usuario desde Google
-        user = new User({
-          nombre: nombre,
-          email: email.toLowerCase(),
-          googleId,
-          password: 'google_' + googleId // Contraseña dummy
-        })
-        await user.save()
-      } else if (!user.googleId) {
+        const { rows } = await db.query(
+          `INSERT INTO public."USUARIO" ("USUARIO", "CORREO_ELECTRONICO", "GOOGLE_ID")
+           VALUES ($1, $2, $3)
+           RETURNING "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"`,
+          [nombre, email.toLowerCase(), googleId]
+        )
+        user = rows[0]
+        console.log('👤 Nuevo usuario creado con Google:', user.CORREO_ELECTRONICO)
+      } else if (!user.GOOGLE_ID) {
         // Vincular Google a cuenta existente
-        user.googleId = googleId
-        await user.save()
+        const { rows } = await db.query(
+          `UPDATE public."USUARIO"
+           SET "GOOGLE_ID" = $1
+           WHERE "ID_USUARIO" = $2
+           RETURNING "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"`,
+          [googleId, user.ID_USUARIO]
+        )
+        user = rows[0]
+        console.log('🔗 Cuenta vinculada a Google:', user.CORREO_ELECTRONICO)
       }
 
-      const token = generateToken(user._id)
+      const token = generateToken(user.ID_USUARIO)
 
       res.json({
         message: 'Login con Google exitoso',
         token,
         user: {
-          id: user._id,
-          nombre: user.nombre,
-          email: user.email
+          id: user.ID_USUARIO,
+          nombre: user.USUARIO,
+          email: user.CORREO_ELECTRONICO
         }
       })
     } catch (error) {
-      console.error('Error en Google login:', error)
-      res.status(400).json({ message: 'Token de Google inválido o expirado' })
+      console.error('❌ Error crítico Google login:', error)
+      res.status(500).json({
+        message: 'Error interno al procesar el login de Google',
+        detail: error.message
+      })
     }
   },
 
   // ✅ FORGOT PASSWORD
+  // NOTA: La tabla USUARIO no tiene columnas de reset token.
+  // Necesitas ejecutar este SQL en Neon para agregárselas:
+  // ALTER TABLE public."USUARIO" ADD COLUMN IF NOT EXISTS "RESET_TOKEN" TEXT;
+  // ALTER TABLE public."USUARIO" ADD COLUMN IF NOT EXISTS "RESET_TOKEN_EXPIRY" TIMESTAMPTZ;
   forgotPassword: async (req, res) => {
     try {
       const { email } = req.body
-
-      if (!email) {
+      if (!email)
         return res.status(400).json({ message: 'Email es requerido' })
-      }
 
-      const user = await User.findOne({ email: email.toLowerCase() })
-      if (!user) {
-        // Retornamos 200 por seguridad (evita enumeración de correos)
-        // y para evitar errores 404 confusos si el endpoint funciona.
+      const db = getPool()
+      const { rows } = await db.query(
+        `SELECT "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"
+         FROM public."USUARIO" WHERE "CORREO_ELECTRONICO" = $1`,
+        [email.toLowerCase()]
+      )
+      const user = rows[0]
+      if (!user)
         return res.json({ message: 'Si el email existe, recibirás un enlace' })
-      }
 
-      const resetToken = user.generateResetToken()
-      await user.save()
+      const resetToken = crypto.randomBytes(32).toString('hex')
+      const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex')
+      const expiry = new Date(Date.now() + 3600000) // 1 hora
 
-      // Enviar email - manejar error gracefully
+      await db.query(
+        `UPDATE public."USUARIO"
+         SET "RESET_TOKEN" = $1, "RESET_TOKEN_EXPIRY" = $2
+         WHERE "ID_USUARIO" = $3`,
+        [hashedToken, expiry, user.ID_USUARIO]
+      )
+
       try {
-        await sendForgotPasswordEmail(user.email, resetToken, user.nombre)
-      } catch (emailError) {
-        // Log error internamente pero NO fallar la solicitud
-        // El token ya está generado, el usuario puede intentar de nuevo
-        // o el admin puede reenviar manualmente
-        console.error('❌ Error enviando email de recuperación:', emailError.message)
-        // No lanzamos el error - continuamos y retornamos éxito de todas formas
-        // Esto evita que usuarios maliciosos descubran qué emails están registrados
+        await sendForgotPasswordEmail(user.CORREO_ELECTRONICO, resetToken, user.USUARIO)
+      } catch (e) {
+        console.error('Error enviando email:', e.message)
       }
 
-      res.json({
-        message: 'Si el email existe, recibirás un enlace de recuperación'
-      })
+      res.json({ message: 'Si el email existe, recibirás un enlace de recuperación' })
     } catch (error) {
       console.error('Error en forgotPassword:', error)
-      // Por seguridad, siempre retornamos mensaje positivo
       res.json({ message: 'Si el email existe, recibirás un enlace de recuperación' })
     }
   },
@@ -252,23 +238,18 @@ console.log('🔐 Using origin for verification:', originForVerification)
   // ✅ VERIFY RESET TOKEN
   verifyResetToken: async (req, res) => {
     try {
-      const { token } = req.params
-
-      const hashedToken = crypto
-        .createHash('sha256')
-        .update(token)
-        .digest('hex')
-
-      const user = await User.findOne({
-        resetToken: hashedToken,
-        resetTokenExpiry: { $gt: new Date() }
-      })
-
-      if (!user) {
+      const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex')
+      const db = getPool()
+      const { rows } = await db.query(
+        `SELECT "ID_USUARIO", "CORREO_ELECTRONICO"
+         FROM public."USUARIO"
+         WHERE "RESET_TOKEN" = $1 AND "RESET_TOKEN_EXPIRY" > NOW()`,
+        [hashedToken]
+      )
+      if (!rows[0])
         return res.status(400).json({ message: 'Token inválido o expirado' })
-      }
 
-      res.json({ message: 'Token válido', email: user.email })
+      res.json({ message: 'Token válido', email: rows[0].CORREO_ELECTRONICO })
     } catch (error) {
       console.error('Error en verifyResetToken:', error)
       res.status(500).json({ message: 'Error al verificar token' })
@@ -280,45 +261,36 @@ console.log('🔐 Using origin for verification:', originForVerification)
     try {
       const { token, newPassword, confirmPassword } = req.body
 
-      if (!token || !newPassword || !confirmPassword) {
+      if (!token || !newPassword || !confirmPassword)
         return res.status(400).json({ message: 'Todos los campos son requeridos' })
-      }
-
-      if (newPassword !== confirmPassword) {
+      if (newPassword !== confirmPassword)
         return res.status(400).json({ message: 'Las contraseñas no coinciden' })
-      }
+      if (newPassword.length < 6)
+        return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' })
 
-      if (newPassword.length < 6) {
-        return res.status(400).json({
-          message: 'La contraseña debe tener al menos 6 caracteres'
-        })
-      }
-
-      const hashedToken = crypto
-        .createHash('sha256')
-        .update(token)
-        .digest('hex')
-
-      const user = await User.findOne({
-        resetToken: hashedToken,
-        resetTokenExpiry: { $gt: new Date() }
-      })
-
-      if (!user) {
+      const hashedToken = crypto.createHash('sha256').update(token).digest('hex')
+      const db = getPool()
+      const { rows } = await db.query(
+        `SELECT "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"
+         FROM public."USUARIO"
+         WHERE "RESET_TOKEN" = $1 AND "RESET_TOKEN_EXPIRY" > NOW()`,
+        [hashedToken]
+      )
+      if (!rows[0])
         return res.status(400).json({ message: 'Token inválido o expirado' })
-      }
 
-      user.password = newPassword
-      user.resetToken = null
-      user.resetTokenExpiry = null
-      await user.save()
+      const hashedPassword = await bcrypt.hash(newPassword, 10)
+      await db.query(
+        `UPDATE public."USUARIO"
+         SET "CONTRASENA" = $1, "RESET_TOKEN" = NULL, "RESET_TOKEN_EXPIRY" = NULL
+         WHERE "ID_USUARIO" = $2`,
+        [hashedPassword, rows[0].ID_USUARIO]
+      )
 
-      // Enviar email de confirmación - manejar error graceful
       try {
-        await sendPasswordResetSuccessEmail(user.email, user.nombre)
-      } catch (emailError) {
-        // Log error pero NO fallar - la contraseña ya fue cambiada
-        console.error('❌ Error enviando email de confirmación:', emailError.message)
+        await sendPasswordResetSuccessEmail(rows[0].CORREO_ELECTRONICO, rows[0].USUARIO)
+      } catch (e) {
+        console.error('Error enviando email:', e.message)
       }
 
       res.json({ message: 'Contraseña actualizada exitosamente' })
