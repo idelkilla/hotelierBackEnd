@@ -7,7 +7,7 @@ dotenv.config()
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 465,
-  secure: true, // true para puerto 465
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
@@ -18,8 +18,10 @@ const transporter = nodemailer.createTransport({
 transporter.verify((error) => {
   if (error) {
     console.error('❌ Error en email service:', error.message)
+    console.error('❌ Detalle completo:', error)
   } else {
     console.log('✅ Email service listo y autenticado')
+    console.log('📧 Usando cuenta:', process.env.EMAIL_USER)
   }
 })
 
@@ -155,15 +157,21 @@ const passwordResetSuccessTemplate = (userName) => `
 // Función para enviar email de recuperación
 export const sendForgotPasswordEmail = async (email, resetToken, userName) => {
   try {
-    // Priorizar VITE_FRONTEND_URL para producción en Render, o limpiar FRONTEND_URL
-    let frontendBase = process.env.VITE_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
-    
-    // Si es una lista de URLs, tomar la de producción (Render) si existe, o la primera
-    const urls = frontendBase.split(',');
-    frontendBase = urls.find(u => u.includes('onrender.com')) || urls[0];
-    frontendBase = frontendBase.trim().replace(/\/$/, '');
+    console.log('📧 Intentando enviar email a:', email)
+    console.log('👤 EMAIL_USER configurado:', process.env.EMAIL_USER)
+    console.log('🔑 EMAIL_PASSWORD existe:', !!process.env.EMAIL_PASSWORD)
+    console.log('🔑 EMAIL_PASSWORD longitud:', process.env.EMAIL_PASSWORD?.length)
+
+    let frontendBase = process.env.VITE_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
+
+    const urls = frontendBase.split(',')
+    frontendBase = urls.find(u => u.includes('onrender.com')) || urls[0]
+    frontendBase = frontendBase.trim().replace(/\/$/, '')
+
+    console.log('🌐 Frontend URL:', frontendBase)
 
     const resetLink = `${frontendBase}/reset-password?token=${resetToken}`
+    console.log('🔗 Reset link generado:', resetLink)
 
     const mailOptions = {
       from: `"Hotelier Support" <${process.env.EMAIL_USER}>`,
@@ -172,11 +180,14 @@ export const sendForgotPasswordEmail = async (email, resetToken, userName) => {
       html: forgotPasswordEmailTemplate(resetLink, userName),
     }
 
-    await transporter.sendMail(mailOptions)
-    console.log(`✅ Email de recuperación enviado a: ${email}`)
+    const info = await transporter.sendMail(mailOptions)
+    console.log('✅ Email de recuperación enviado a:', email)
+    console.log('📨 Message ID:', info.messageId)
     return true
   } catch (error) {
-    console.error('❌ Error enviando email:', error.message)
+    console.error('❌ Error enviando email — mensaje:', error.message)
+    console.error('❌ Error enviando email — código:', error.code)
+    console.error('❌ Error completo:', error)
     throw new Error('Servicio de correo no disponible')
   }
 }
@@ -184,6 +195,8 @@ export const sendForgotPasswordEmail = async (email, resetToken, userName) => {
 // Función para enviar email de éxito
 export const sendPasswordResetSuccessEmail = async (email, userName) => {
   try {
+    console.log('📧 Enviando email de confirmación a:', email)
+
     const mailOptions = {
       from: `"Hotelier Support" <${process.env.EMAIL_USER}>`,
       to: email,
@@ -191,10 +204,14 @@ export const sendPasswordResetSuccessEmail = async (email, userName) => {
       html: passwordResetSuccessTemplate(userName),
     }
 
-    await transporter.sendMail(mailOptions)
+    const info = await transporter.sendMail(mailOptions)
+    console.log('✅ Email de confirmación enviado a:', email)
+    console.log('📨 Message ID:', info.messageId)
     return true
   } catch (error) {
-    console.error('❌ Error email éxito:', error.message)
+    console.error('❌ Error email éxito — mensaje:', error.message)
+    console.error('❌ Error email éxito — código:', error.code)
+    console.error('❌ Error completo:', error)
     throw error
   }
 }
