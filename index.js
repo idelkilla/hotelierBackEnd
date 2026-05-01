@@ -19,7 +19,7 @@ const __dirname = path.dirname(__filename)
 
 // 1. PRIMERO: Headers de Seguridad para Google Auth (COOP/COEP)
 app.use((req, res, next) => {
-  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none')
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups') // ← clave
   res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none')
   next()
 })
@@ -33,6 +33,7 @@ const allowedOrigins = [
   'http://localhost:5175',
   'https://hotelierfrontend-ka0o.onrender.com',
   'https://hotelierfronend-ka0o.onrender.com',
+  'https://hotelierbackend-1.onrender.com',
   ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : [])
 ].filter(Boolean).map(url => url.replace(/\/$/, ''))
 
