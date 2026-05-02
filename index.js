@@ -73,6 +73,11 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' })
 })
 
+app.get('/api/admin-config', (req, res) => {
+  // Provee el email de admin al frontend para consistencia en la validación
+  res.json({ adminEmail: 'admin@gmail.com' })
+})
+
 app.get('/', (req, res) => {
   res.json({ message: 'API running' })
 })
