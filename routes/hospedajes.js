@@ -268,6 +268,67 @@ router.post('/', authenticateToken, async (req, res, next) => {
 })
 
 // ─────────────────────────────────────────────────────────────────
+// PUT /api/hospedajes/:id  — editar hospedaje completo
+// ─────────────────────────────────────────────────────────────────
+router.put('/:id', authenticateToken, async (req, res, next) => {
+  const { id } = req.params
+  const {
+    nombre, descripcion = '', id_tipo_hospedaje,
+    checkin, checkout, cancelacion, mascotas, fumar,
+    ubicacion = {}, servicios_incluidos = [],
+  } = req.body
+
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN')
+
+    // 1. Actualizar SERVICIO (nombre)
+    await client.query(
+      `UPDATE public."SERVICIO" SET "NOMBRE" = $1 WHERE "ID_SERVICIO" = $2`,
+      [nombre, id]
+    )
+
+    // 2. Actualizar HOSPEDAJE
+    await client.query(
+      `UPDATE public."HOSPEDAJE"
+       SET "ID_TIPO" = $1, "CHECKIN" = $2, "CHECKOUT" = $3,
+           "CANCELACION" = $4, "MASCOTAS" = $5, "FUMAR" = $6, "DESCRIPCION" = $7
+       WHERE "ID_HOSPEDAJE" = $8`,
+      [id_tipo_hospedaje, checkin, checkout, cancelacion, mascotas, fumar, descripcion, id]
+    )
+
+    // 3. Actualizar UBICACION
+    const { rows: [hosp] } = await client.query(
+      `SELECT "ID_UBICACION" FROM public."HOSPEDAJE" WHERE "ID_HOSPEDAJE" = $1`, [id]
+    )
+    await client.query(
+      `UPDATE public."UBICACION"
+       SET "NOMBRE" = $1, "LATITUD" = $2, "LONGITUD" = $3, "ID_CIUDAD" = $4
+       WHERE "ID_UBICACION" = $5`,
+      [ubicacion.nombre, ubicacion.latitud, ubicacion.longitud, ubicacion.id_ciudad, hosp.ID_UBICACION]
+    )
+
+    // 4. Reemplazar amenidades
+    await client.query(`DELETE FROM public."HOSPEDAJE_SERVICIO" WHERE "ID_HOSPEDAJE" = $1`, [id])
+    if (servicios_incluidos.length) {
+      const vals = servicios_incluidos.map((_, i) => `($1, $${i + 2})`).join(', ')
+      await client.query(
+        `INSERT INTO public."HOSPEDAJE_SERVICIO" ("ID_HOSPEDAJE","ID_SERVICIO_INCLUIDO") VALUES ${vals} ON CONFLICT DO NOTHING`,
+        [id, ...servicios_incluidos]
+      )
+    }
+
+    await client.query('COMMIT')
+    res.json({ message: 'Hospedaje actualizado.' })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    next(err)
+  } finally {
+    client.release()
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────
 // POST /api/hospedajes/:id/habitaciones  — agregar habitaciones (bulk)
 // ─────────────────────────────────────────────────────────────────
 router.post('/:id/habitaciones', authenticateToken, async (req, res, next) => {
