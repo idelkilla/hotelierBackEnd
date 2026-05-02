@@ -170,11 +170,11 @@ export const sendForgotPasswordEmail = async (email, resetToken, userName) => {
 
     console.log('🌐 Frontend URL:', frontendBase)
 
-    const resetLink = `${frontendBase}/reset-password?token=${resetToken}`
+    const resetLink = `${frontendBase}/reset-password/${resetToken}`
     console.log('🔗 Reset link generado:', resetLink)
 
     const mailOptions = {
-      from: `"Hotelier Support" <${process.env.EMAIL_USER}>`,
+      from: `"Hotelier Support" <${process.env.EMAIL_USER || 'no-reply@hotelier.com'}>`,
       to: email,
       subject: '🔐 Recuperar tu contraseña',
       html: forgotPasswordEmailTemplate(resetLink, userName),
