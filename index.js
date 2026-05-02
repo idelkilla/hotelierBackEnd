@@ -77,7 +77,7 @@ app.get('/', (req, res) => {
   res.json({ message: 'API running' })
 })
 
-app.get('*', (req, res) => {
+app.get(/(.*)/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
