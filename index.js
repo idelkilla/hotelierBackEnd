@@ -31,14 +31,19 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
   'http://localhost:5175',
-  'https://hotelierfrontend-ka0o.onrender.com',
   'https://hotelierfronend-ka0o.onrender.com',
   'https://hotelierbackend-1.onrender.com',
   ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : [])
-].filter(Boolean).map(url => url.replace(/\/$/, ''))
+].filter(Boolean).map(url => url.trim().replace(/\/$/, ''))
 
 const corsOptions = {
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ''))) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true
 }
 
