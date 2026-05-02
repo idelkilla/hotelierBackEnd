@@ -91,13 +91,18 @@ router.get('/:id', async (req, res, next) => {
          h."CANCELACION",
          h."MASCOTAS",
          h."FUMAR",
-         h."DESCRIPCION"
+         h."DESCRIPCION",
+         -- Calificación y total de reseñas
+         (SELECT ROUND(AVG(r."CALIFICACION")::numeric, 1) FROM public."RESENA" r WHERE r."ID_SERVICIO" = h."ID_HOSPEDAJE") AS "CALIFICACION_PROMEDIO",
+         (SELECT COUNT(*) FROM public."RESENA" r WHERE r."ID_SERVICIO" = h."ID_HOSPEDAJE") AS "TOTAL_RESENAS",
+         p."NOMBRE_LEGAL"   AS "PROVEEDOR"
        FROM public."HOSPEDAJE"      h
        JOIN public."SERVICIO"       s  ON s."ID_SERVICIO"  = h."ID_HOSPEDAJE"
        JOIN public."TIPO_HOSPEDAJE" th ON th."ID_TIPO"     = h."ID_TIPO"
        JOIN public."UBICACION"      u  ON u."ID_UBICACION" = h."ID_UBICACION"
        JOIN public."CIUDAD"         ci ON ci."ID_CIUDAD"   = u."ID_CIUDAD"
        JOIN public."PAIS"           pa ON pa."ID_PAIS"     = ci."ID_PAIS"
+       JOIN public."PROVEEDOR"      p  ON p."ID_PROVEEDOR" = s."ID_PROVEEDOR"
        WHERE h."ID_HOSPEDAJE" = $1`,
       [id]
     )
@@ -389,44 +394,103 @@ router.get('/search/ubicaciones', async (req, res, next) => {
 // POST /api/search/hospedaje — buscador principal usado en Cuerpo.vue
 // ─────────────────────────────────────────────────────────────────
 router.post('/search/hospedaje', async (req, res, next) => {
-  const { destino } = req.body;
+  const { destino, fecha_inicio, fecha_fin, habitaciones = [] } = req.body;
+
+  if (fecha_inicio && fecha_fin) {
+    const fechaInicio = new Date(fecha_inicio)
+    const fechaFin = new Date(fecha_fin)
+
+    if (isNaN(fechaInicio.getTime()) || isNaN(fechaFin.getTime())) {
+      return res.status(400).json({ error: 'Formato de fecha inválido' })
+    }
+
+    if (fechaFin <= fechaInicio) {
+      return res.status(400).json({ error: 'La fecha fin debe ser posterior a la fecha inicio' })
+    }
+  }
+
+  // Suma total de adultos y niños pedidos
+  const totalAdultos = habitaciones.reduce((s, h) => s + (h.adultos || 0), 0);
+  const totalNinos   = habitaciones.reduce((s, h) => s + (h.ninos  || 0), 0);
+
   try {
     const { rows } = await db.query(
       `SELECT
-         h."ID_HOSPEDAJE" AS "id_servicio",
-         s."NOMBRE"       AS "hotel",
-         th."NOMBRE_TIPO" AS "tipo_hospedaje",
-         u."NOMBRE"       AS "ubicacion",
-         -- Subconsulta para todas las imágenes del hotel
+         h."ID_HOSPEDAJE" AS id_servicio,
+         s."NOMBRE"       AS hotel,
+         th."NOMBRE_TIPO" AS tipo_hospedaje,
+         u."NOMBRE"       AS ubicacion,
+
+         -- Todas las imágenes ordenadas
          ARRAY(
            SELECT img."URL"
            FROM public."IMAGEN_HOSPEDAJE" img
            WHERE img."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
            ORDER BY img."ORDEN"
-         ) AS "imagenes",
-         -- Subconsulta para nombres de amenidades
+         ) AS imagenes,
+
+         -- Amenidades
          ARRAY(
            SELECT si."NOMBRE"
            FROM public."HOSPEDAJE_SERVICIO" hs
            JOIN public."SERVICIO_INCLUIDO"  si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
            WHERE hs."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
-         ) AS "amenidades",
-         -- Campos para el rating (pueden ser nulos o calculados)
-         NULL AS "calificacion_promedio",
-         0    AS "total_resenas",
-         -- Cálculo del precio mínimo basado en sus habitaciones
+         ) AS amenidades,
+
+         -- ✅ Calificación promedio REAL desde RESENA
+         (SELECT ROUND(AVG(r."CALIFICACION")::numeric, 1)
+          FROM public."RESENA" r
+          WHERE r."ID_SERVICIO" = h."ID_HOSPEDAJE") AS calificacion_promedio,
+
+         -- ✅ Total de reseñas REAL
+         (SELECT COUNT(*)
+          FROM public."RESENA" r
+          WHERE r."ID_SERVICIO" = h."ID_HOSPEDAJE") AS total_resenas,
+
+         -- Precio mínimo de habitación disponible
          (SELECT MIN(hab."PRECIO_NOCHE")
           FROM public."HABITACION" hab
-          WHERE hab."ID_HOSPEDAJE" = h."ID_HOSPEDAJE") AS "precio_min"
+          WHERE hab."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
+            -- ✅ Solo habitaciones sin conflicto de fechas
+            AND ($3::date IS NULL OR $4::date IS NULL OR NOT EXISTS (
+              SELECT 1 FROM public."DISPONIBILIDAD" d
+              WHERE d."ID_HABITACION" = hab."ID_HABITACION"
+                AND d."ESTADO" = 'O'
+                AND d."FECHA" >= $3::date
+                AND d."FECHA" <  $4::date
+            ))
+            -- ✅ Solo habitaciones con capacidad suficiente
+            AND ($5 = 0 OR hab."CAPACIDAD_ADULTO" >= $5)
+            AND ($6 = 0 OR hab."CAPACIDAD_NINOS"  >= $6)
+         ) AS precio_min
        FROM public."HOSPEDAJE"      h
        JOIN public."SERVICIO"       s  ON s."ID_SERVICIO"  = h."ID_HOSPEDAJE"
        JOIN public."TIPO_HOSPEDAJE" th ON th."ID_TIPO"     = h."ID_TIPO"
        JOIN public."UBICACION"      u  ON u."ID_UBICACION" = h."ID_UBICACION"
        JOIN public."CIUDAD"         ci ON ci."ID_CIUDAD"   = u."ID_CIUDAD"
-       WHERE s."NOMBRE" ILIKE $1 
-          OR u."NOMBRE" ILIKE $1 
-          OR ci."NOMBRE" ILIKE $1`,
-      [`%${destino || ''}%`]
+       WHERE (s."NOMBRE" ILIKE $1 OR u."NOMBRE" ILIKE $1 OR ci."NOMBRE" ILIKE $1)
+         -- ✅ Excluir hospedajes sin ninguna habitación disponible para esas fechas/capacidad
+       AND EXISTS (
+         SELECT 1 FROM public."HABITACION" hab2
+         WHERE hab2."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
+           AND ($3::date IS NULL OR $4::date IS NULL OR NOT EXISTS (
+             SELECT 1 FROM public."DISPONIBILIDAD" d2
+             WHERE d2."ID_HABITACION" = hab2."ID_HABITACION"
+               AND d2."ESTADO" = 'O'
+               AND d2."FECHA" >= $3::date
+               AND d2."FECHA" <  $4::date
+           ))
+           AND ($5 = 0 OR hab2."CAPACIDAD_ADULTO" >= $5)
+           AND ($6 = 0 OR hab2."CAPACIDAD_NINOS"  >= $6)
+       )`,
+      [
+        `%${destino || ''}%`,
+        null,                           // $2 sin uso (reservado para extensión)
+        fecha_inicio || null,           // $3
+        fecha_fin    || null,           // $4
+        totalAdultos,                   // $5
+        totalNinos,                     // $6
+      ]
     );
     res.json(rows);
   } catch (err) { next(err); }

@@ -112,19 +112,17 @@ export const postBuscarHospedaje = async (req, res) => {
             return res.status(400).json({ error: 'Parámetro habitaciones requerido y no vacío' })
         }
 
-        if (!fecha_inicio || !fecha_fin) {
-            return res.status(400).json({ error: 'Fechas de inicio y fin requeridas' })
-        }
+        if (fecha_inicio && fecha_fin) {
+            const fechaInicio = new Date(fecha_inicio)
+            const fechaFin = new Date(fecha_fin)
 
-        const fechaInicio = new Date(fecha_inicio)
-        const fechaFin = new Date(fecha_fin)
-        
-        if (isNaN(fechaInicio.getTime()) || isNaN(fechaFin.getTime())) {
-            return res.status(400).json({ error: 'Formato de fecha inválido' })
-        }
+            if (isNaN(fechaInicio.getTime()) || isNaN(fechaFin.getTime())) {
+                return res.status(400).json({ error: 'Formato de fecha inválido' })
+            }
 
-        if (fechaFin <= fechaInicio) {
-            return res.status(400).json({ error: 'La fecha fin debe ser posterior a la fecha inicio' })
+            if (fechaFin <= fechaInicio) {
+                return res.status(400).json({ error: 'La fecha fin debe ser posterior a la fecha inicio' })
+            }
         }
 
         const pool = getPool()
