@@ -52,14 +52,14 @@ const corsOptions = {
 app.use(cors(corsOptions))
 
 // 3. TERCERO: Preflight para todas las rutas
-app.options('{*path}', cors());
+app.options('{path}', cors());
 
 // 4. CUARTO: Parsers y Rutas Estáticas
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
-// 5. QUINTO: Rutas de la API
+// 5. QUINTO: Rutas de la API — ✅ CORRECT — all under /api/*
 app.use('/api/auth', authRoutes)
 app.use('/api/search', searchRoutes)
 app.use('/api/usuarios', userRoutes)
@@ -69,10 +69,11 @@ app.use('/api/hospedaje', hospedajeDetalleRoutes)
 app.use('/api/reservas', reservasRoutes)
 app.use('/api/habitaciones', habitacionesRoutes)
 
-// Mapeo adicional para consistencia con EditarUsuarioPanel.vue
+// Alias routes for EditarUsuarioPanel
 app.use('/api/empleados', userRoutes)
 app.use('/api/clientes', userRoutes)
 app.use('/api/miembros', userRoutes)
+
 
 // Borrador de hospedajes
 const borradores = new Map()
