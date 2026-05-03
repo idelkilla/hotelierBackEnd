@@ -11,6 +11,7 @@ import userRoutes from './routes/userRoutes.js'
 import hospedajesRoutes from './routes/hospedajes.js'
 import catalogosRoutes from './routes/catalogos.js'
 import hospedajeDetalleRoutes from './routes/hospedajeDetalle.js'
+import reservasRoutes from './routes/reservas.js'
 import errorHandler from './middleware/errorHandler.js'
 
 const app = express()
@@ -50,7 +51,7 @@ const corsOptions = {
 app.use(cors(corsOptions))
 
 // 3. TERCERO: Preflight para todas las rutas
-app.options('{*path}', cors());
+app.options('*', cors());
 
 // 4. CUARTO: Parsers y Rutas Estáticas
 app.use(express.json())
@@ -64,6 +65,7 @@ app.use('/api/usuarios', userRoutes)
 app.use('/api/hospedajes', hospedajesRoutes)
 app.use('/api/catalogos', catalogosRoutes)
 app.use('/api/hospedaje', hospedajeDetalleRoutes)
+app.use('/api/reservas', reservasRoutes)
 
 // Borrador de hospedajes
 const borradores = new Map()

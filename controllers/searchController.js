@@ -39,7 +39,9 @@ export const getUbicaciones = async (req, res) => {
             JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
             JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
             JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
-            WHERE u."NOMBRE" ILIKE $1
+            WHERE u."NOMBRE" ILIKE $1 
+               OR c."NOMBRE" ILIKE $1 
+               OR p."NOMBRE" ILIKE $1
             ORDER BY u."NOMBRE"
             LIMIT 20
         `, [searchText])
@@ -149,6 +151,7 @@ export const postBuscarHospedaje = async (req, res) => {
                 u."NOMBRE"                               AS ubicacion_nombre,
                 c."NOMBRE"                               AS ciudad,
                 p."NOMBRE"                               AS pais,
+                hos."ID_TIPO"                            AS id_tipo_hospedaje,
                 th."NOMBRE_TIPO"                         AS tipo_hospedaje,
                 MIN(hab."PRECIO_NOCHE")                  AS precio_min,
                 ROUND(AVG(r."CALIFICACION")::NUMERIC, 1) AS calificacion_promedio,
@@ -173,7 +176,7 @@ export const postBuscarHospedaje = async (req, res) => {
                 AND hab."CAPACIDAD_ADULTO" >= $2
                 AND hab."CAPACIDAD_NINOS" >= $3
             GROUP BY 
-                s."ID_SERVICIO", s."NOMBRE", u."NOMBRE", 
+                s."ID_SERVICIO", s."NOMBRE", u."NOMBRE", hos."ID_TIPO",
                 c."NOMBRE", p."NOMBRE", th."NOMBRE_TIPO"
             HAVING COUNT(hab."ID_HABITACION") > 0
             ORDER BY precio_min ASC
@@ -230,6 +233,7 @@ export const postBuscarHospedaje = async (req, res) => {
                 .filter(Boolean)
                 .join(', ') || 'Ubicación no disponible',
             tipo_hospedaje: r.tipo_hospedaje,
+            id_tipo_hospedaje: r.id_tipo_hospedaje,
             precio_min: parseFloat(r.precio_min) || 0,
             calificacion_promedio: r.calificacion_promedio 
                 ? parseFloat(r.calificacion_promedio) 
@@ -317,8 +321,21 @@ export const getDetalleHospedaje = async (req, res) => {
             WHERE hs."ID_HOSPEDAJE" = $1
         `, [hospedajeId])
 
+        const det = rows[0]
         res.json({
-            ...rows[0],
+            id_servicio: det.id_servicio,
+            hotel: det.hotel,
+            ciudad: det.ciudad,
+            pais: det.pais,
+            ubicacion_nombre: det.ubicacion_nombre,
+            tipo_hospedaje: det.tipo_hospedaje,
+            proveedor: det.proveedor,
+            checkin: det.CHECKIN,
+            checkout: det.CHECKOUT,
+            cancelacion: det.CANCELACION,
+            mascotas: !!det.MASCOTAS,
+            fumar: !!det.FUMAR,
+            descripcion: det.DESCRIPCION,
             habitaciones,
             imagenes,
             amenidades: amenidades.map(a => a.NOMBRE),
