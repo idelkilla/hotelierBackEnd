@@ -8,28 +8,14 @@ const router = Router()
  * Obtiene el listado completo de reservas con nombres de clientes, 
  * ubicaciones y estados procesados.
  */
-router.get('/', async (req, res, next) => {
+router.get('/', async (_req, res, next) => {
   try {
     const { rows } = await db.query(`
-        SELECT 
-            r."ID_RESERVA", 
-            p_cli."NOMBRE_COMPLETO" as cliente_nombre,
-            u_ori."NOMBRE" as origen_nombre,
-            u_des."NOMBRE" as destino_nombre,
-            r."FECHA_INICIO", 
-            r."FECHA_FIN", 
-            er."ESTADO" as estado_nombre,
-            p_emp."NOMBRE_COMPLETO" as empleado_nombre,
-            r."ID_ESTADO"
-        FROM public."RESERVA" r
-        LEFT JOIN public."CLIENTE" c ON r."ID_CLIENTE" = c."ID_CLIENTE"
-        LEFT JOIN public."PERSONA" p_cli ON c."ID_PERSONA" = p_cli."ID_PERSONA"
-        LEFT JOIN public."UBICACION" u_ori ON r."ID_ORIGEN" = u_ori."ID_UBICACION"
-        LEFT JOIN public."UBICACION" u_des ON r."ID_DESTINO" = u_des."ID_UBICACION"
-        LEFT JOIN public."ESTADO_RESERVA" er ON r."ID_ESTADO" = er."ID_ESTADO"
-        LEFT JOIN public."EMPLEADO" e ON r."ID_EMPLEADO" = e."ID_EMPLEADO"
-        LEFT JOIN public."PERSONA" p_emp ON e."ID_PERSONA" = p_emp."ID_PERSONA"
-        ORDER BY r."ID_RESERVA" DESC
+      SELECT r."ID_RESERVA", r."FECHA_INICIO", r."FECHA_FIN",
+             e."ESTADO" AS "ESTADO"
+      FROM public."RESERVA" r
+      JOIN public."ESTADO_RESERVA" e ON e."ID_ESTADO" = r."ID_ESTADO"
+      ORDER BY r."ID_RESERVA" DESC
     `)
     res.json(rows)
   } catch (err) {

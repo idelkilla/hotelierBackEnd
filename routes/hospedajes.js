@@ -22,19 +22,15 @@ const upload = multer({ storage })
  * GET /api/hospedajes
  * Listado para la tabla administrativa
  */
-router.get('/', async (req, res, next) => {
+router.get('/', async (_req, res, next) => {
   try {
     const { rows } = await db.query(`
-      SELECT 
-        h."ID_HOSPEDAJE", 
-        s."NOMBRE", 
-        th."NOMBRE_TIPO" AS "TIPO_HOSPEDAJE",
-        u."NOMBRE" AS "UBICACION",
-        c."NOMBRE" AS "CIUDAD",
-        p."NOMBRE" AS "PAIS",
-        (SELECT "URL" FROM public."IMAGEN_HOSPEDAJE" WHERE "ID_HOSPEDAJE" = h."ID_HOSPEDAJE" ORDER BY "ORDEN" LIMIT 1) AS "IMAGEN_PORTADA"
+      SELECT h."ID_HOSPEDAJE", th."NOMBRE_TIPO" AS "TIPO_HOSPEDAJE",
+             u."NOMBRE", c."NOMBRE" AS "CIUDAD", p."NOMBRE" AS "PAIS",
+             (SELECT i."URL" FROM public."IMAGEN_HOSPEDAJE" i 
+              WHERE i."ID_HOSPEDAJE" = h."ID_HOSPEDAJE" 
+              ORDER BY i."ORDEN" LIMIT 1) AS "IMAGEN_PORTADA"
       FROM public."HOSPEDAJE" h
-      JOIN public."SERVICIO" s ON s."ID_SERVICIO" = h."ID_HOSPEDAJE"
       JOIN public."TIPO_HOSPEDAJE" th ON th."ID_TIPO" = h."ID_TIPO"
       JOIN public."UBICACION" u ON u."ID_UBICACION" = h."ID_UBICACION"
       JOIN public."CIUDAD" c ON c."ID_CIUDAD" = u."ID_CIUDAD"

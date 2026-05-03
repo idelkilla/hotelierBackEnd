@@ -4,6 +4,30 @@ import * as db from '../db.js'
 const router = Router()
 
 /**
+ * GET /api/habitaciones
+ * Obtiene el listado de todas las habitaciones con su tipo y estado de reserva.
+ */
+router.get('/', async (_req, res, next) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT h."ID_HABITACION", h."CAPACIDAD_ADULTO", h."CAPACIDAD_NINOS",
+             h."PRECIO_NOCHE", h."ID_HOSPEDAJE",
+             t."NOMBRE" AS "TIPO_HABITACION",
+             EXISTS(
+               SELECT 1 FROM public."DISPONIBILIDAD" d
+               WHERE d."ID_HABITACION" = h."ID_HABITACION"
+               AND d."ESTADO" = 'R'
+             ) AS "RESERVADA"
+      FROM public."HABITACION" h
+      JOIN public."TIPO_HABITACION" t ON t."ID_TIPO_HABITACION" = h."ID_TIPO_HABITACION"
+    `)
+    res.json(rows)
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * PUT /api/habitaciones/:id
  * Actualiza una habitación existente
  */
