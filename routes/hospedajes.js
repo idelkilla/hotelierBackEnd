@@ -19,10 +19,104 @@ const storage = multer.diskStorage({
 const upload = multer({ storage })
 
 /**
- * POST /api/hospedajes
- * Crea un nuevo hospedaje con sus imágenes y habitaciones
+ * GET /api/hospedajes
+ * Listado para la tabla administrativa
  */
-router.post('/', upload.array('imagenes', 10), async (req, res, next) => {
+router.get('/', async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT 
+        h."ID_HOSPEDAJE", 
+        s."NOMBRE", 
+        th."NOMBRE_TIPO" AS "TIPO_HOSPEDAJE",
+        u."NOMBRE" AS "UBICACION",
+        c."NOMBRE" AS "CIUDAD",
+        p."NOMBRE" AS "PAIS",
+        (SELECT "URL" FROM public."IMAGEN_HOSPEDAJE" WHERE "ID_HOSPEDAJE" = h."ID_HOSPEDAJE" ORDER BY "ORDEN" LIMIT 1) AS "IMAGEN_PORTADA"
+      FROM public."HOSPEDAJE" h
+      JOIN public."SERVICIO" s ON s."ID_SERVICIO" = h."ID_HOSPEDAJE"
+      JOIN public."TIPO_HOSPEDAJE" th ON th."ID_TIPO" = h."ID_TIPO"
+      JOIN public."UBICACION" u ON u."ID_UBICACION" = h."ID_UBICACION"
+      JOIN public."CIUDAD" c ON c."ID_CIUDAD" = u."ID_CIUDAD"
+      JOIN public."PAIS" p ON p."ID_PAIS" = c."ID_PAIS"
+      ORDER BY h."ID_HOSPEDAJE" DESC
+    `)
+    res.json(rows)
+  } catch (err) { next(err) }
+})
+
+/**
+ * GET /api/hospedajes/:id
+ * Detalle completo para el panel de edición
+ */
+router.get('/:id', async (req, res, next) => {
+  const { id } = req.params
+  try {
+    const { rows: h } = await db.query(`
+      SELECT s."NOMBRE", h.*, c."ID_PAIS"
+      FROM public."HOSPEDAJE" h
+      JOIN public."SERVICIO" s ON s."ID_SERVICIO" = h."ID_HOSPEDAJE"
+      JOIN public."UBICACION" u ON u."ID_UBICACION" = h."ID_UBICACION"
+      JOIN public."CIUDAD" c ON c."ID_CIUDAD" = u."ID_CIUDAD"
+      WHERE h."ID_HOSPEDAJE" = $1`, [id])
+    
+    if (!h.length) return res.status(404).json({ message: 'No encontrado' })
+
+    const { rows: habs } = await db.query('SELECT * FROM public."HABITACION" WHERE "ID_HOSPEDAJE" = $1', [id])
+    const { rows: amens } = await db.query('SELECT "ID_SERVICIO_INCLUIDO" FROM public."HOSPEDAJE_SERVICIO" WHERE "ID_HOSPEDAJE" = $1', [id])
+    
+    res.json({
+      ...h[0],
+      habitaciones: habs,
+      amenidades: amens
+    })
+  } catch (err) { next(err) }
+})
+
+/**
+ * PUT /api/hospedajes/:id
+ * Actualización de datos básicos y ubicación
+ */
+router.put('/:id', async (req, res, next) => {
+  const { id } = req.params
+  const data = req.body
+  const client = await db.getPool().connect()
+  try {
+    await client.query('BEGIN')
+    await client.query('UPDATE public."SERVICIO" SET "NOMBRE" = $1 WHERE "ID_SERVICIO" = $2', [data.nombre, id])
+    await client.query(`
+      UPDATE public."HOSPEDAJE" 
+      SET "DESCRIPCION" = $1, "CHECKIN" = $2, "CHECKOUT" = $3, "CANCELACION" = $4, "MASCOTAS" = $5, "FUMAR" = $6, "ID_TIPO" = $7
+      WHERE "ID_HOSPEDAJE" = $8`, 
+      [data.descripcion, data.checkin, data.checkout, data.cancelacion, data.mascotas, data.fumar, data.id_tipo_hospedaje, id])
+    
+    if (data.ubicacion) {
+      const { rows: h } = await client.query('SELECT "ID_UBICACION" FROM public."HOSPEDAJE" WHERE "ID_HOSPEDAJE" = $1', [id])
+      await client.query(`
+        UPDATE public."UBICACION" SET "NOMBRE" = $1, "LATITUD" = $2, "LONGITUD" = $3, "ID_CIUDAD" = $4
+        WHERE "ID_UBICACION" = $5`, [data.ubicacion.nombre, data.ubicacion.latitud, data.ubicacion.longitud, data.ubicacion.id_ciudad, h[0].ID_UBICACION])
+    }
+    await client.query('COMMIT')
+    res.json({ message: 'Actualizado' })
+  } catch (err) { await client.query('ROLLBACK'); next(err) }
+  finally { client.release() }
+})
+
+/**
+ * DELETE /api/hospedajes/:id
+ */
+router.delete('/:id', async (req, res, next) => {
+  try {
+    await db.query('DELETE FROM public."SERVICIO" WHERE "ID_SERVICIO" = $1', [req.params.id])
+    res.json({ message: 'Eliminado' })
+  } catch (err) { next(err) }
+})
+
+/**
+ * POST /api/hospedajes
+ * Compatible con adminAgregarHotel.vue (JSON)
+ */
+router.post('/', async (req, res, next) => {
   const client = await db.getPool().connect()
   
   try {

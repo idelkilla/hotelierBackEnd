@@ -12,6 +12,7 @@ import hospedajesRoutes from './routes/hospedajes.js'
 import catalogosRoutes from './routes/catalogos.js'
 import hospedajeDetalleRoutes from './routes/hospedajeDetalle.js'
 import reservasRoutes from './routes/reservas.js'
+import habitacionesRoutes from './routes/habitaciones.js'
 import errorHandler from './middleware/errorHandler.js'
 
 const app = express()
@@ -66,6 +67,12 @@ app.use('/api/hospedajes', hospedajesRoutes)
 app.use('/api/catalogos', catalogosRoutes)
 app.use('/api/hospedaje', hospedajeDetalleRoutes)
 app.use('/api/reservas', reservasRoutes)
+app.use('/api/habitaciones', habitacionesRoutes)
+
+// Mapeo adicional para consistencia con EditarUsuarioPanel.vue
+app.use('/api/empleados', userRoutes)
+app.use('/api/clientes', userRoutes)
+app.use('/api/miembros', userRoutes)
 
 // Borrador de hospedajes
 const borradores = new Map()

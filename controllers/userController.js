@@ -1,5 +1,38 @@
 import { getPool } from '../db.js'
 
+/**
+ * GET /api/usuarios
+ * Listado unificado de Empleados, Clientes y Miembros para Admin
+ */
+export const getUsers = async (req, res, next) => {
+  try {
+    const pool = getPool()
+    const { rows } = await pool.query(`
+      SELECT 
+        u."ID_USUARIO" as id, 
+        p."NOMBRE_COMPLETO" as nombre,
+        CASE 
+          WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'Empleado'
+          WHEN m."ID_CLIENTE" IS NOT NULL THEN 'Miembro'
+          ELSE 'Cliente'
+        END as tipo,
+        u."CORREO_ELECTRONICO" as correo,
+        COALESCE(c."ESTADO_CLIENTE", 'A') as estado,
+        nm."NOMBRE_NIVEL" as nivel_membresia
+      FROM public."USUARIO" u
+      JOIN public."PERSONA" p ON u."ID_PERSONA" = p."ID_PERSONA"
+      LEFT JOIN public."EMPLEADO" e ON p."ID_PERSONA" = e."ID_PERSONA"
+      LEFT JOIN public."CLIENTE" c ON p."ID_PERSONA" = c."ID_CLIENTE"
+      LEFT JOIN public."MIEMBRO" m ON p."ID_PERSONA" = m."ID_CLIENTE"
+      LEFT JOIN public."NIVEL_MEMBRESIA" nm ON m."ID_NIVEL" = nm."ID_NIVEL"
+      ORDER BY u."ID_USUARIO" DESC
+    `)
+    res.json(rows)
+  } catch (error) {
+    next(error)
+  }
+}
+
 // ─────────────────────────────────────────────
 // GET /api/user/profile
 // ─────────────────────────────────────────────
