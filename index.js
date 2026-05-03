@@ -51,7 +51,7 @@ const corsOptions = {
 app.use(cors(corsOptions))
 
 // 3. TERCERO: Preflight para todas las rutas
-app.options('*', cors());
+app.options('{*path}', cors());
 
 // 4. CUARTO: Parsers y Rutas Estáticas
 app.use(express.json())
