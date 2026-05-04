@@ -23,8 +23,8 @@ router.get('/', async (_req, res, next) => {
           ELSE 'Cliente'
         END                                   AS tipo
       FROM public."CLIENTE" c
-      JOIN public."PERSONA"  p ON p."ID_PERSONA"  = c."ID_CLIENTE"
-      JOIN public."USUARIO"  u ON u."ID_PERSONA"  = c."ID_CLIENTE"
+      LEFT JOIN public."PERSONA"  p ON p."ID_PERSONA"  = c."ID_CLIENTE"
+      LEFT JOIN public."USUARIO"  u ON u."ID_PERSONA"  = c."ID_CLIENTE"
       LEFT JOIN public."MIEMBRO" m          ON m."ID_CLIENTE"  = c."ID_CLIENTE"
       LEFT JOIN public."NIVEL_MEMBRESIA" nm ON nm."ID_NIVEL"   = m."ID_NIVEL"
       ORDER BY p."NOMBRE_COMPLETO"
@@ -95,8 +95,8 @@ router.get('/:id', async (req, res, next) => {
         tel."NUMERO_TELEFONICO",
         tel."ID_TIPO"   AS id_tipo_telefono
       FROM public."CLIENTE" c
-      JOIN public."PERSONA" p  ON p."ID_PERSONA" = c."ID_CLIENTE"
-      JOIN public."USUARIO" u  ON u."ID_PERSONA" = c."ID_CLIENTE"
+      LEFT JOIN public."PERSONA" p  ON p."ID_PERSONA" = c."ID_CLIENTE"
+      LEFT JOIN public."USUARIO" u  ON u."ID_PERSONA" = c."ID_CLIENTE"
       LEFT JOIN public."DOCUMENTACION" doc ON doc."ID_PERSONA" = c."ID_CLIENTE"
       LEFT JOIN public."TELEFONO" tel      ON tel."ID_PERSONA" = c."ID_CLIENTE"
       WHERE c."ID_CLIENTE" = $1
