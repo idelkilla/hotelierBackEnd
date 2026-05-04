@@ -25,7 +25,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
       FROM public."USUARIO" u
       LEFT JOIN public."PERSONA"  p  ON p."ID_PERSONA"  = u."ID_PERSONA"
       LEFT JOIN public."EMPLEADO" e  ON e."ID_EMPLEADO" = u."ID_PERSONA"
-      LEFT JOIN public."CLIENTE"  c  ON c."ID_CLIENTE"  = u."ID_PERSONA"
+      LEFT JOIN public."CLIENTE"  c  ON c."ID_CLIENTE"  = u."ID_PERSONA" -- ✅ CORRECTO: CLIENTE y MIEMBRO usan ID_CLIENTE como PK
       LEFT JOIN public."MIEMBRO"  m  ON m."ID_CLIENTE"  = u."ID_PERSONA"
       LEFT JOIN public."NIVEL_MEMBRESIA" nm ON nm."ID_NIVEL" = m."ID_NIVEL"
       ORDER BY u."ID_USUARIO" DESC
@@ -42,7 +42,7 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
   const { id } = req.params
   const tipo = (req.query.tipo || '').toLowerCase()
   try {
-    // Datos base del usuario + persona
+    // 1. Obtener datos del usuario
     const { rows: base } = await db.query(`
       SELECT
         u."ID_USUARIO"           AS id,
@@ -61,15 +61,20 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
       LIMIT 1
     `, [id])
 
-    if (!base.length) return res.status(404).json({ message: 'Usuario no encontrado' })
+    if (!base.length) {
+      return res.status(404).json({ message: 'Usuario no encontrado' })
+    }
 
-    console.log('🔍 base[0]:', base[0])
     const usuario = { ...base[0] }
     const idPersona = usuario.ID_PERSONA
     delete usuario.ID_PERSONA
 
-    if (!idPersona) return res.json(usuario)
+    // 2. Si no hay ID_PERSONA, retornar solo usuario base
+    if (!idPersona) {
+      return res.json(usuario)
+    }
 
+    // 3. Cargar datos específicos según tipo
     if (tipo === 'empleado') {
       const { rows } = await db.query(`
         SELECT
@@ -88,19 +93,26 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
       Object.assign(usuario, rows[0] || {})
     }
 
+    // ✅ CLIENTE: Obtener datos correctamente
     if (tipo === 'cliente' || tipo === 'miembro') {
       const { rows } = await db.query(`
         SELECT
+          c."ID_CLIENTE",
           c."ESTADO_CLIENTE"        AS estado,
           c."GENERO"                AS genero,
           c."FECHA_NACIMIENTO"      AS fecha_nacimiento,
-          c."DESCRIPCION_PERSONAL"  AS descripcion_personal
+          c."DESCRIPCION_PERSONAL"  AS descripcion_personal,
+          c."FECHA_REGISTRO"
         FROM public."CLIENTE" c
         WHERE c."ID_CLIENTE" = $1
       `, [idPersona])
-      Object.assign(usuario, rows[0] || {})
+
+      if (rows.length > 0) {
+        Object.assign(usuario, rows[0])
+      }
     }
 
+    // ✅ MIEMBRO: Obtener datos correctamente
     if (tipo === 'miembro') {
       const { rows } = await db.query(`
         SELECT
@@ -113,7 +125,10 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
         LEFT JOIN public."NIVEL_MEMBRESIA" nm ON nm."ID_NIVEL" = m."ID_NIVEL"
         WHERE m."ID_CLIENTE" = $1
       `, [idPersona])
-      Object.assign(usuario, rows[0] || {})
+
+      if (rows.length > 0) {
+        Object.assign(usuario, rows[0])
+      }
     }
 
     res.json(usuario)
