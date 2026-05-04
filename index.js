@@ -11,7 +11,8 @@ import userRoutes from './routes/userRoutes.js'
 import hospedajesRouter from './routes/hospedajes.js'
 import clientesRoutes from './routes/clientes.js'
 import dashboardRouter from './routes/dashboard.js'
-import catalogosRoutes from './routes/catalogos.js'
+import catalogosRouter from './routes/catalogos.js'
+import usuariosRouter from './routes/usuarios.js'
 import hospedajeDetalleRoutes from './routes/hospedajeDetalle.js'
 import reservasRouter from './routes/reservas.js'
 import habitacionesRoutes from './routes/habitaciones.js'
@@ -66,10 +67,10 @@ app.use('/api/auth', authRoutes)
 app.use('/api/search', searchRoutes)
 app.use('/api/user', userRoutes)
 app.use('/api/hospedajes', hospedajesRouter)
-app.use('/api/catalogos', catalogosRoutes)
+app.use('/api/catalogos', catalogosRouter)
 app.use('/api/hospedaje', hospedajeDetalleRoutes)
 app.use('/api/reservas', reservasRouter)
-app.use('/api/usuarios', userRoutes)
+app.use('/api/usuarios', usuariosRouter)
 app.use('/api/dashboard', dashboardRouter)
 app.use('/api/habitaciones', habitacionesRoutes)
 

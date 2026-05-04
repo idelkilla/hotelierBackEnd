@@ -10,7 +10,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
     const { rows } = await db.query(`
       SELECT
         u."ID_USUARIO"                        AS id,
-        p."NOMBRE_COMPLETO"                   AS nombre,
+        COALESCE(p."NOMBRE_COMPLETO", u."USUARIO") AS nombre,
         u."CORREO_ELECTRONICO"                AS correo,
         u."USUARIO"                           AS usuario,
         CASE
@@ -31,7 +31,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
     `)
     res.json(rows)
   } catch (err) {
-    console.error('❌ /api/usuarios error:', err.message)
+    console.error('❌ GET /api/usuarios error:', err.message)
     next(err)
   }
 })
@@ -47,7 +47,8 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
         u."ID_USUARIO"           AS id,
         u."USUARIO"              AS usuario,
         u."CORREO_ELECTRONICO"   AS correo,
-        p."NOMBRE_COMPLETO"      AS nombre_completo,
+        u."ID_PERSONA",
+        COALESCE(p."NOMBRE_COMPLETO", u."USUARIO") AS nombre_completo,
         p."APELLIDOS"            AS apellidos,
         t."CODIGO_PAIS"          AS codigo_pais,
         t."NUMERO_TELEFONICO"    AS numero_telefonico
@@ -62,12 +63,13 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
     if (!base.length) return res.status(404).json({ message: 'Usuario no encontrado' })
 
     const usuario = { ...base[0] }
-    const idPersona = await db.query(
-      `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`, [id]
-    ).then(r => r.rows[0]?.ID_PERSONA)
+    const idPersona = usuario.ID_PERSONA
+    delete usuario.ID_PERSONA
 
-    if (tipo === 'empleado' && idPersona) {
-      const { rows: emp } = await db.query(`
+    if (!idPersona) return res.json(usuario)
+
+    if (tipo === 'empleado') {
+      const { rows } = await db.query(`
         SELECT
           e."FECHA_CONTRATACION",
           ep."SUELDO"            AS sueldo,
@@ -78,25 +80,27 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
           AND ep."FECHA_FIN" >= CURRENT_DATE
         LEFT JOIN public."PUESTO" pu ON pu."ID_PUESTO" = ep."ID_PUESTO"
         WHERE e."ID_EMPLEADO" = $1
+        ORDER BY ep."FECHA_INICIO" DESC
         LIMIT 1
       `, [idPersona])
-      Object.assign(usuario, emp[0] || {})
+      Object.assign(usuario, rows[0] || {})
     }
 
-    if ((tipo === 'cliente' || tipo === 'miembro') && idPersona) {
-      const { rows: cli } = await db.query(`
+    if (tipo === 'cliente' || tipo === 'miembro') {
+      const { rows } = await db.query(`
         SELECT
           c."ESTADO_CLIENTE"        AS estado,
           c."GENERO"                AS genero,
+          c."FECHA_NACIMIENTO"      AS fecha_nacimiento,
           c."DESCRIPCION_PERSONAL"  AS descripcion_personal
         FROM public."CLIENTE" c
         WHERE c."ID_CLIENTE" = $1
       `, [idPersona])
-      Object.assign(usuario, cli[0] || {})
+      Object.assign(usuario, rows[0] || {})
     }
 
-    if (tipo === 'miembro' && idPersona) {
-      const { rows: mem } = await db.query(`
+    if (tipo === 'miembro') {
+      const { rows } = await db.query(`
         SELECT
           m."NUMERO_MIEMBRO",
           m."FECHA_INICIO",
@@ -107,12 +111,12 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
         LEFT JOIN public."NIVEL_MEMBRESIA" nm ON nm."ID_NIVEL" = m."ID_NIVEL"
         WHERE m."ID_CLIENTE" = $1
       `, [idPersona])
-      Object.assign(usuario, mem[0] || {})
+      Object.assign(usuario, rows[0] || {})
     }
 
     res.json(usuario)
   } catch (err) {
-    console.error('❌ /api/usuarios/:id error:', err.message)
+    console.error('❌ GET /api/usuarios/:id error:', err.message)
     next(err)
   }
 })
