@@ -63,6 +63,7 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 
     if (!base.length) return res.status(404).json({ message: 'Usuario no encontrado' })
 
+    console.log('🔍 base[0]:', base[0])
     const usuario = { ...base[0] }
     const idPersona = usuario.ID_PERSONA
     delete usuario.ID_PERSONA
