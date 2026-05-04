@@ -11,11 +11,22 @@ const router = Router()
 router.get('/', async (_req, res, next) => {
   try {
     const { rows } = await db.query(`
-      SELECT r."ID_RESERVA", r."FECHA_INICIO", r."FECHA_FIN",
-             e."ESTADO" AS "ESTADO"
+      SELECT
+        r."ID_RESERVA"                         AS id_reserva,
+        r."FECHA_INICIO"                        AS fecha_inicio,
+        r."FECHA_FIN"                           AS fecha_fin,
+        er."ESTADO"                             AS estado,
+        p."NOMBRE_COMPLETO"                     AS cliente_nombre,
+        uo."NOMBRE"                             AS origen,
+        ud."NOMBRE"                             AS destino
       FROM public."RESERVA" r
-      JOIN public."ESTADO_RESERVA" e ON e."ID_ESTADO" = r."ID_ESTADO"
-      ORDER BY r."ID_RESERVA" DESC
+      JOIN public."ESTADO_RESERVA" er ON er."ID_ESTADO" = r."ID_ESTADO"
+      JOIN public."CLIENTE" c         ON c."ID_CLIENTE" = r."ID_CLIENTE"
+      JOIN public."PERSONA" p         ON p."ID_PERSONA" = c."ID_CLIENTE"
+      LEFT JOIN public."UBICACION" uo ON uo."ID_UBICACION" = r."ID_ORIGEN"
+      LEFT JOIN public."UBICACION" ud ON ud."ID_UBICACION" = r."ID_DESTINO"
+      ORDER BY r."FECHA_INICIO" DESC
+      LIMIT 50
     `)
     res.json(rows)
   } catch (err) {

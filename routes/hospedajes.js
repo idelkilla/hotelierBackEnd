@@ -25,19 +25,52 @@ const upload = multer({ storage })
 router.get('/', async (_req, res, next) => {
   try {
     const { rows } = await db.query(`
-      SELECT h."ID_HOSPEDAJE", th."NOMBRE_TIPO" AS "TIPO_HOSPEDAJE",
-             u."NOMBRE", c."NOMBRE" AS "CIUDAD", p."NOMBRE" AS "PAIS",
-             (SELECT i."URL" FROM public."IMAGEN_HOSPEDAJE" i 
-              WHERE i."ID_HOSPEDAJE" = h."ID_HOSPEDAJE" 
-              ORDER BY i."ORDEN" LIMIT 1) AS "IMAGEN_PORTADA"
-      FROM public."HOSPEDAJE" h
-      JOIN public."TIPO_HOSPEDAJE" th ON th."ID_TIPO" = h."ID_TIPO"
-      JOIN public."UBICACION" u ON u."ID_UBICACION" = h."ID_UBICACION"
-      JOIN public."CIUDAD" c ON c."ID_CIUDAD" = u."ID_CIUDAD"
-      JOIN public."PAIS" p ON p."ID_PAIS" = c."ID_PAIS"
-      ORDER BY h."ID_HOSPEDAJE" DESC
+      SELECT
+        s."ID_SERVICIO"                           AS id_hospedaje,
+        s."NOMBRE"                                AS nombre,
+        th."NOMBRE_TIPO"                          AS tipo_hospedaje,
+        u."NOMBRE"                                AS ubicacion,
+        ci."NOMBRE"                               AS ciudad,
+        pa."NOMBRE"                               AS pais,
+        hos."CHECKIN",
+        hos."CHECKOUT",
+        hos."MASCOTAS",
+        hos."FUMAR",
+        hos."DESCRIPCION",
+        ROUND(AVG(re."CALIFICACION")::NUMERIC, 1) AS calificacion,
+        COUNT(DISTINCT re."ID_RESENA")            AS total_resenas,
+        MIN(hab."PRECIO_NOCHE")                   AS precio_min,
+        (SELECT img."URL"
+         FROM public."IMAGEN_HOSPEDAJE" img
+         WHERE img."ID_HOSPEDAJE" = s."ID_SERVICIO"
+         ORDER BY img."ORDEN" ASC LIMIT 1)        AS imagen_portada
+      FROM public."SERVICIO" s
+      JOIN public."HOSPEDAJE" hos        ON hos."ID_HOSPEDAJE" = s."ID_SERVICIO"
+      JOIN public."TIPO_HOSPEDAJE" th    ON th."ID_TIPO"       = hos."ID_TIPO"
+      JOIN public."UBICACION" u          ON u."ID_UBICACION"   = hos."ID_UBICACION"
+      JOIN public."CIUDAD" ci            ON ci."ID_CIUDAD"     = u."ID_CIUDAD"
+      JOIN public."PAIS" pa              ON pa."ID_PAIS"       = ci."ID_PAIS"
+      LEFT JOIN public."HABITACION" hab  ON hab."ID_HOSPEDAJE" = hos."ID_HOSPEDAJE"
+      LEFT JOIN public."RESENA" re       ON re."ID_SERVICIO"   = s."ID_SERVICIO"
+      GROUP BY
+        s."ID_SERVICIO", s."NOMBRE", th."NOMBRE_TIPO",
+        u."NOMBRE", ci."NOMBRE", pa."NOMBRE",
+        hos."CHECKIN", hos."CHECKOUT", hos."MASCOTAS", hos."FUMAR", hos."DESCRIPCION"
+      ORDER BY s."ID_SERVICIO" DESC
     `)
     res.json(rows)
+  } catch (err) { next(err) }
+})
+
+/**
+ * GET /api/hospedajes/habitaciones-count
+ */
+router.get('/habitaciones-count', async (_req, res, next) => {
+  try {
+    const { rows: [r] } = await db.query(
+      `SELECT COUNT(*) AS total FROM public."HABITACION"`
+    )
+    res.json({ total: parseInt(r.total, 10) })
   } catch (err) { next(err) }
 })
 

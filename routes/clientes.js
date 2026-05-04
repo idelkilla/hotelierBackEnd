@@ -1,5 +1,6 @@
 // routes/clientes.js
 import { Router } from 'express'
+import bcrypt from 'bcryptjs'
 import * as db from '../db.js'
 
 const router = Router()

@@ -8,10 +8,10 @@ import { connectDB } from './db.js'
 import authRoutes from './routes/authRoutes.js'
 import searchRoutes from './routes/searchRoutes.js'
 import userRoutes from './routes/userRoutes.js'
-import hospedajesRoutes from './routes/hospedajes.js'
+import hospedajesRouter from './routes/hospedajes.js'
 import catalogosRoutes from './routes/catalogos.js'
 import hospedajeDetalleRoutes from './routes/hospedajeDetalle.js'
-import reservasRoutes from './routes/reservas.js'
+import reservasRouter from './routes/reservas.js'
 import habitacionesRoutes from './routes/habitaciones.js'
 import errorHandler from './middleware/errorHandler.js'
 
@@ -63,10 +63,11 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 app.use('/api/auth', authRoutes)
 app.use('/api/search', searchRoutes)
 app.use('/api/usuarios', userRoutes)
-app.use('/api/hospedajes', hospedajesRoutes)
+app.use('/api/hospedajes', hospedajesRouter)
 app.use('/api/catalogos', catalogosRoutes)
 app.use('/api/hospedaje', hospedajeDetalleRoutes)
-app.use('/api/reservas', reservasRoutes)
+app.use('/api/reservas', reservasRouter)
+app.use('/api/dashboard', hospedajesRouter)
 app.use('/api/habitaciones', habitacionesRoutes)
 
 // Alias routes for EditarUsuarioPanel
