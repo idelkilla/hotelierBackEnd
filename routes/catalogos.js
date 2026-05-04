@@ -1,4 +1,7 @@
-// routes/catalogos.js
+/**
+ * NOTE: All routes here are prefixed with /api/catalogos in index.js
+ * Ensure frontend calls include the /api prefix.
+ */
 import { Router } from 'express'
 import * as db from '../db.js'
 
