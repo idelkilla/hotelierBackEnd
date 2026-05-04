@@ -36,13 +36,13 @@ export const getUbicaciones = async (req, res) => {
                 tu."NOMBRE"      as tipo_nombre,
                 tu."ICONO"       as icono
             FROM public."UBICACION" u
-            JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
-            JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
-            JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
+            LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
+            LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
+            LEFT JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
             WHERE u."NOMBRE" ILIKE $1 
                OR c."NOMBRE" ILIKE $1 
                OR p."NOMBRE" ILIKE $1
-            ORDER BY u."NOMBRE"
+            ORDER BY u."ID_TIPO" DESC, u."NOMBRE" ASC
             LIMIT 20
         `, [searchText])
         
@@ -59,7 +59,7 @@ export const getUbicaciones = async (req, res) => {
         res.json(rows)
     } catch (err) {
         console.error('❌ Error en getUbicaciones:', err.message)
-        res.status(500).json([])
+        res.status(500).json({ error: err.message, stack: err.stack })
     }
 }
 
@@ -88,10 +88,10 @@ export const getAeropuertos = async (req, res) => {
                 tu."NOMBRE"      as tipo_nombre,
                 tu."ICONO"       as icono
             FROM public."UBICACION" u
-            JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
-            JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
-            JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
-            WHERE u."ID_TIPO" = 1
+            LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
+            LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
+            LEFT JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
+            WHERE (u."ID_TIPO" = 1 OR tu."NOMBRE" ILIKE '%aeropuerto%')
               AND (u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
             ORDER BY u."NOMBRE"
             LIMIT 20
@@ -101,7 +101,7 @@ export const getAeropuertos = async (req, res) => {
         res.json(rows)
     } catch (err) {
         console.error('❌ Error en getAeropuertos:', err.message)
-        res.status(500).json([])
+        res.status(500).json({ error: err.message, stack: err.stack })
     }
 }
 

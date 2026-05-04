@@ -8,6 +8,7 @@ const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
   secure: false,        // false = STARTTLS
+  service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS   // App Password de Google, no tu contraseña normal
@@ -159,8 +160,8 @@ export const sendForgotPasswordEmail = async (email, resetToken, userName) => {
   try {
     console.log('📧 Intentando enviar email a:', email)
     console.log('👤 EMAIL_USER configurado:', process.env.EMAIL_USER)
-    console.log('🔑 EMAIL_PASSWORD existe:', !!process.env.EMAIL_PASSWORD)
-    console.log('🔑 EMAIL_PASSWORD longitud:', process.env.EMAIL_PASSWORD?.length)
+    console.log('🔑 EMAIL_PASS existe:', !!process.env.EMAIL_PASS)
+    console.log('🔑 EMAIL_PASS longitud:', process.env.EMAIL_PASS?.length)
 
     let frontendBase = process.env.VITE_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
 
