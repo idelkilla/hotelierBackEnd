@@ -31,7 +31,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
     `)
     res.json(rows)
   } catch (err) {
-    console.error('❌ GET /api/usuarios error:', err.message)
+    console.error('❌ GET /api/usuarios error:', err.stack)
     next(err)
   }
 })
@@ -116,7 +116,7 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 
     res.json(usuario)
   } catch (err) {
-    console.error('❌ GET /api/usuarios/:id error:', err.message)
+    console.error('❌ GET /api/usuarios/:id error:', err.stack)
     next(err)
   }
 })

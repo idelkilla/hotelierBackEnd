@@ -35,7 +35,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
     `)
     res.json(rows)
   } catch (err) {
-    console.error('❌ /api/reservas error:', err.message)
+    console.error('❌ /api/reservas error:', err.stack)
     res.status(500).json({ error: 'Error consultando reservas', detail: err.message })
   }
 })
