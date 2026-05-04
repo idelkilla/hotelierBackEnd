@@ -4,6 +4,7 @@
  */
 import { Router } from 'express'
 import * as db from '../db.js'
+import { authenticateToken } from '../middleware/authMiddleware.js'
 
 const router = Router()
 
@@ -18,10 +19,10 @@ const makeGet = (sql) => async (_req, res, next) => {
 // ════════════════════════════════════════════════════════════════════════════
 // HOSPEDAJE
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/tipos-hospedaje', makeGet(
+router.get('/tipos-hospedaje', authenticateToken, makeGet(
   `SELECT "ID_TIPO", "NOMBRE_TIPO" FROM public."TIPO_HOSPEDAJE" ORDER BY "NOMBRE_TIPO"`
 ))
-router.post('/tipos-hospedaje', async (req, res, next) => {
+router.post('/tipos-hospedaje', authenticateToken, async (req, res, next) => {
   try {
     const { NOMBRE_TIPO } = req.body
     const { rows: [r] } = await db.query(
@@ -30,7 +31,7 @@ router.post('/tipos-hospedaje', async (req, res, next) => {
     res.status(201).json(r)
   } catch (err) { next(err) }
 })
-router.patch('/tipos-hospedaje/:id', async (req, res, next) => {
+router.patch('/tipos-hospedaje/:id', authenticateToken, async (req, res, next) => {
   try {
     const { NOMBRE_TIPO } = req.body
     const { rows: [r] } = await db.query(
@@ -41,7 +42,7 @@ router.patch('/tipos-hospedaje/:id', async (req, res, next) => {
     res.json(r)
   } catch (err) { next(err) }
 })
-router.delete('/tipos-hospedaje/:id', async (req, res, next) => {
+router.delete('/tipos-hospedaje/:id', authenticateToken, async (req, res, next) => {
   try {
     await db.query(`DELETE FROM public."TIPO_HOSPEDAJE" WHERE "ID_TIPO" = $1`, [req.params.id])
     res.json({ message: 'Eliminado' })
@@ -51,10 +52,10 @@ router.delete('/tipos-hospedaje/:id', async (req, res, next) => {
 // ════════════════════════════════════════════════════════════════════════════
 // HABITACIÓN
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/tipos-habitacion', makeGet(
+router.get('/tipos-habitacion', authenticateToken, makeGet(
   `SELECT "ID_TIPO_HABITACION", "NOMBRE" FROM public."TIPO_HABITACION" ORDER BY "NOMBRE"`
 ))
-router.post('/tipos-habitacion', async (req, res, next) => {
+router.post('/tipos-habitacion', authenticateToken, async (req, res, next) => {
   try {
     const { NOMBRE } = req.body
     const { rows: [r] } = await db.query(
@@ -63,7 +64,7 @@ router.post('/tipos-habitacion', async (req, res, next) => {
     res.status(201).json(r)
   } catch (err) { next(err) }
 })
-router.patch('/tipos-habitacion/:id', async (req, res, next) => {
+router.patch('/tipos-habitacion/:id', authenticateToken, async (req, res, next) => {
   try {
     const { NOMBRE } = req.body
     const { rows: [r] } = await db.query(
@@ -74,7 +75,7 @@ router.patch('/tipos-habitacion/:id', async (req, res, next) => {
     res.json(r)
   } catch (err) { next(err) }
 })
-router.delete('/tipos-habitacion/:id', async (req, res, next) => {
+router.delete('/tipos-habitacion/:id', authenticateToken, async (req, res, next) => {
   try {
     await db.query(`DELETE FROM public."TIPO_HABITACION" WHERE "ID_TIPO_HABITACION" = $1`, [req.params.id])
     res.json({ message: 'Eliminado' })
@@ -84,10 +85,10 @@ router.delete('/tipos-habitacion/:id', async (req, res, next) => {
 // ════════════════════════════════════════════════════════════════════════════
 // SERVICIOS INCLUIDOS
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/servicios-incluidos', makeGet(
+router.get('/servicios-incluidos', authenticateToken, makeGet(
   `SELECT "ID_SERVICIO_INCLUIDO", "NOMBRE" FROM public."SERVICIO_INCLUIDO" ORDER BY "NOMBRE"`
 ))
-router.post('/servicios-incluidos', async (req, res, next) => {
+router.post('/servicios-incluidos', authenticateToken, async (req, res, next) => {
   try {
     const { NOMBRE } = req.body
     const { rows: [r] } = await db.query(
@@ -96,7 +97,7 @@ router.post('/servicios-incluidos', async (req, res, next) => {
     res.status(201).json(r)
   } catch (err) { next(err) }
 })
-router.patch('/servicios-incluidos/:id', async (req, res, next) => {
+router.patch('/servicios-incluidos/:id', authenticateToken, async (req, res, next) => {
   try {
     const { NOMBRE } = req.body
     const { rows: [r] } = await db.query(
@@ -107,7 +108,7 @@ router.patch('/servicios-incluidos/:id', async (req, res, next) => {
     res.json(r)
   } catch (err) { next(err) }
 })
-router.delete('/servicios-incluidos/:id', async (req, res, next) => {
+router.delete('/servicios-incluidos/:id', authenticateToken, async (req, res, next) => {
   try {
     await db.query(`DELETE FROM public."SERVICIO_INCLUIDO" WHERE "ID_SERVICIO_INCLUIDO" = $1`, [req.params.id])
     res.json({ message: 'Eliminado' })
@@ -117,10 +118,10 @@ router.delete('/servicios-incluidos/:id', async (req, res, next) => {
 // ════════════════════════════════════════════════════════════════════════════
 // ESTADOS DE RESERVA
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/estados-reserva', makeGet(
+router.get('/estados-reserva', authenticateToken, makeGet(
   `SELECT "ID_ESTADO", "ESTADO" FROM public."ESTADO_RESERVA" ORDER BY "ESTADO"`
 ))
-router.post('/estados-reserva', async (req, res, next) => {
+router.post('/estados-reserva', authenticateToken, async (req, res, next) => {
   try {
     const { ESTADO } = req.body
     // ESTADO_RESERVA no usa identity, necesita ID manual — ajusta si usas sequence
@@ -132,7 +133,7 @@ router.post('/estados-reserva', async (req, res, next) => {
     res.status(201).json(r)
   } catch (err) { next(err) }
 })
-router.patch('/estados-reserva/:id', async (req, res, next) => {
+router.patch('/estados-reserva/:id', authenticateToken, async (req, res, next) => {
   try {
     const { ESTADO } = req.body
     const { rows: [r] } = await db.query(
@@ -143,7 +144,7 @@ router.patch('/estados-reserva/:id', async (req, res, next) => {
     res.json(r)
   } catch (err) { next(err) }
 })
-router.delete('/estados-reserva/:id', async (req, res, next) => {
+router.delete('/estados-reserva/:id', authenticateToken, async (req, res, next) => {
   try {
     await db.query(`DELETE FROM public."ESTADO_RESERVA" WHERE "ID_ESTADO" = $1`, [req.params.id])
     res.json({ message: 'Eliminado' })
@@ -153,11 +154,11 @@ router.delete('/estados-reserva/:id', async (req, res, next) => {
 // ════════════════════════════════════════════════════════════════════════════
 // NIVELES DE MEMBRESÍA
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/niveles-membresia', makeGet(
+router.get('/niveles-membresia', authenticateToken, makeGet(
   `SELECT "ID_NIVEL", "NOMBRE_NIVEL", "PUNTOS_MINIMOS", "DESCRIPCION"
    FROM public."NIVEL_MEMBRESIA" ORDER BY "PUNTOS_MINIMOS"`
 ))
-router.post('/niveles-membresia', async (req, res, next) => {
+router.post('/niveles-membresia', authenticateToken, async (req, res, next) => {
   try {
     const { NOMBRE_NIVEL, PUNTOS_MINIMOS, DESCRIPCION } = req.body
     const { rows: [r] } = await db.query(
@@ -168,7 +169,7 @@ router.post('/niveles-membresia', async (req, res, next) => {
     res.status(201).json(r)
   } catch (err) { next(err) }
 })
-router.patch('/niveles-membresia/:id', async (req, res, next) => {
+router.patch('/niveles-membresia/:id', authenticateToken, async (req, res, next) => {
   try {
     const { NOMBRE_NIVEL, PUNTOS_MINIMOS, DESCRIPCION } = req.body
     const { rows: [r] } = await db.query(
@@ -183,7 +184,7 @@ router.patch('/niveles-membresia/:id', async (req, res, next) => {
     res.json(r)
   } catch (err) { next(err) }
 })
-router.delete('/niveles-membresia/:id', async (req, res, next) => {
+router.delete('/niveles-membresia/:id', authenticateToken, async (req, res, next) => {
   try {
     await db.query(`DELETE FROM public."NIVEL_MEMBRESIA" WHERE "ID_NIVEL" = $1`, [req.params.id])
     res.json({ message: 'Eliminado' })
@@ -193,10 +194,10 @@ router.delete('/niveles-membresia/:id', async (req, res, next) => {
 // ════════════════════════════════════════════════════════════════════════════
 // TIPOS DE UBICACIÓN
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/tipos-ubicacion', makeGet(
+router.get('/tipos-ubicacion', authenticateToken, makeGet(
   `SELECT "ID_TIPO", "NOMBRE" FROM public."TIPO_UBICACION" ORDER BY "NOMBRE"`
 ))
-router.post('/tipos-ubicacion', async (req, res, next) => {
+router.post('/tipos-ubicacion', authenticateToken, async (req, res, next) => {
   try {
     const { NOMBRE } = req.body
     const { rows: [r] } = await db.query(
@@ -205,7 +206,7 @@ router.post('/tipos-ubicacion', async (req, res, next) => {
     res.status(201).json(r)
   } catch (err) { next(err) }
 })
-router.patch('/tipos-ubicacion/:id', async (req, res, next) => {
+router.patch('/tipos-ubicacion/:id', authenticateToken, async (req, res, next) => {
   try {
     const { NOMBRE } = req.body
     const { rows: [r] } = await db.query(
@@ -216,7 +217,7 @@ router.patch('/tipos-ubicacion/:id', async (req, res, next) => {
     res.json(r)
   } catch (err) { next(err) }
 })
-router.delete('/tipos-ubicacion/:id', async (req, res, next) => {
+router.delete('/tipos-ubicacion/:id', authenticateToken, async (req, res, next) => {
   try {
     await db.query(`DELETE FROM public."TIPO_UBICACION" WHERE "ID_TIPO" = $1`, [req.params.id])
     res.json({ message: 'Eliminado' })
@@ -257,7 +258,7 @@ router.get('/tipos-proveedor', makeGet(
   `SELECT "ID_TIPO", "NOMBRE_TIPO" FROM public."TIPO_PROVEEDOR" ORDER BY "NOMBRE_TIPO"`
 ))
 
-router.get('/puestos', makeGet(
+router.get('/puestos', authenticateToken, makeGet(
   `SELECT "ID_PUESTO", "NOMBRE_PUESTO", "SUELDO_BASE" FROM public."PUESTO" ORDER BY "NOMBRE_PUESTO"`
 ))
 
