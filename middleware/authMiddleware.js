@@ -1,9 +1,12 @@
 import jwt from 'jsonwebtoken'
 
-export const authenticateToken = (req, res, next) => { //
+export const authenticateToken = (req, res, next) => {
+  // ✅ Declarar PRIMERO, antes de los console.log
+  const authHeader = req.headers['authorization']
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null
 
   console.log('🔍 [AUTH] Header:', authHeader ? 'Present' : 'MISSING')
-  console.log('🔍 [AUTH] Token:', token ? `${token.slice(0,20)}...` : 'NO TOKEN')
+  console.log('🔍 [AUTH] Token:', token ? `${token.slice(0, 20)}...` : 'NO TOKEN')
 
   if (!token) {
     console.log('❌ [401] No token provided')
@@ -14,8 +17,8 @@ export const authenticateToken = (req, res, next) => { //
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    console.log('✅ [AUTH] Token valid → user:', decoded.id, decoded.role) //
-    req.user = decoded // { id: ..., role: ... }
+    console.log('✅ [AUTH] Token valid → user:', decoded.id, decoded.role)
+    req.user = decoded
     next()
   } catch (err) {
     console.error('❌ [403] JWT verify failed:', {
@@ -30,9 +33,9 @@ export const authenticateToken = (req, res, next) => { //
 
 export const authenticateAdmin = (req, res, next) => {
   authenticateToken(req, res, () => {
-    if (req.user.role !== 'admin') { //
-      return res.status(403).json({ error: 'Acceso denegado: Se requiere rol de administrador' });
+    if (req.user?.role !== 'admin') {  // ✅ opcional chaining por seguridad
+      return res.status(403).json({ error: 'Acceso denegado: Se requiere rol de administrador' })
     }
-    next();
-  });
-};
+    next()
+  })
+}
