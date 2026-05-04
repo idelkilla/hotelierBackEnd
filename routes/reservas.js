@@ -69,6 +69,9 @@ router.get('/:id/detalles', async (req, res, next) => {
 router.patch('/:id/estado', async (req, res, next) => {
   const { id } = req.params
   const { ID_ESTADO } = req.body
+  if (!id || ID_ESTADO === undefined) {
+    return res.status(400).json({ message: 'ID de reserva o nuevo estado faltante' })
+  }
   try {
     await db.query(`
         UPDATE public."RESERVA"
