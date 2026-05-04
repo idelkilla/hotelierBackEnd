@@ -18,9 +18,11 @@ const authController = {
 
   // ✅ LOGIN
   login: async (req, res) => {
+    console.log('📥 Login body recibido:', req.body)
     try {
       const { email, usuarioOrEmail, password } = req.body
       const identifier = (email || usuarioOrEmail || '').toLowerCase()
+      console.log('🔍 Identifier:', identifier)
 
       if (!identifier || !password)
         return res.status(400).json({ message: 'Email y contraseña son requeridos' })
