@@ -14,6 +14,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
         COALESCE(p."NOMBRE_COMPLETO", u."USUARIO") AS nombre,
         u."CORREO_ELECTRONICO"                AS correo,
         u."USUARIO"                           AS usuario,
+        u."ID_PERSONA",
         CASE
           WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'Empleado'
           WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'Miembro'
@@ -90,7 +91,9 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
         ORDER BY ep."FECHA_INICIO" DESC
         LIMIT 1
       `, [idPersona])
-      Object.assign(usuario, rows[0] || {})
+      if (rows.length > 0) {
+        Object.assign(usuario, rows[0])
+      }
     }
 
     // ✅ CLIENTE: Obtener datos correctamente
@@ -109,6 +112,10 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 
       if (rows.length > 0) {
         Object.assign(usuario, rows[0])
+      } else {
+        return res.status(404).json({ 
+          message: `No se encontró registro de ${tipo} para este usuario` 
+        })
       }
     }
 
@@ -128,6 +135,10 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 
       if (rows.length > 0) {
         Object.assign(usuario, rows[0])
+      } else {
+        return res.status(404).json({ 
+          message: 'Este cliente no es miembro' 
+        })
       }
     }
 
@@ -143,12 +154,9 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
   const {
     nombre_completo, apellidos, correo, usuario,
     codigo_pais, numero_telefonico, contrasena,
-    // Empleado
-    id_puesto, turno, sueldo, fecha_contratacion,
-    // Cliente
+    id_puesto, sueldo,
     genero, estado_cliente, descripcion_personal,
-    // Miembro
-    numero_miembro, id_nivel, puntos_fidelidad, fecha_inicio,
+    numero_miembro, id_nivel, puntos_fidelidad,
     tipo
   } = req.body
 
@@ -164,14 +172,18 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
     const { rows: [u] } = await db.query(
       `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`, [id]
     )
-    const idPersona = u?.ID_PERSONA
-    if (!idPersona) return res.status(404).json({ message: 'Usuario no encontrado' })
+    if (!u?.ID_PERSONA) return res.status(404).json({ message: 'Usuario no encontrado' })
+    const idPersona = u.ID_PERSONA
 
-    await db.query(`
-      UPDATE public."PERSONA"
-      SET "NOMBRE_COMPLETO" = $1, "APELLIDOS" = $2
-      WHERE "ID_PERSONA" = $3
-    `, [nombre_completo, apellidos, idPersona])
+    // Actualizar PERSONA
+    if (nombre_completo || apellidos) {
+      await db.query(`
+        UPDATE public."PERSONA"
+        SET "NOMBRE_COMPLETO" = COALESCE($1, "NOMBRE_COMPLETO"),
+            "APELLIDOS" = COALESCE($2, "APELLIDOS")
+        WHERE "ID_PERSONA" = $3
+      `, [nombre_completo, apellidos, idPersona])
+    }
 
     // 2. Contraseña (opcional)
     if (contrasena) {
@@ -194,29 +206,30 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
     // 4. Datos específicos por tipo
     const t = tipo?.toLowerCase()
 
-    if (t === 'empleado') {
+    if (t === 'empleado' && id_puesto) {
       await db.query(`
         UPDATE public."EMPLEADO_PUESTO"
-        SET "ID_PUESTO" = $1, "SUELDO" = $2
+        SET "ID_PUESTO" = $1, "SUELDO" = COALESCE($2, "SUELDO")
         WHERE "ID_EMPLEADO" = $3 AND "FECHA_FIN" >= CURRENT_DATE
       `, [id_puesto, sueldo, idPersona])
     }
 
-    if (t === 'cliente' || t === 'miembro') {
+    if ((t === 'cliente' || t === 'miembro') && (genero || estado_cliente)) {
       await db.query(`
         UPDATE public."CLIENTE"
-        SET "GENERO" = $1, "ESTADO_CLIENTE" = $2, "DESCRIPCION_PERSONAL" = $3
+        SET "GENERO" = COALESCE($1, "GENERO"),
+            "ESTADO_CLIENTE" = COALESCE($2, "ESTADO_CLIENTE"),
+            "DESCRIPCION_PERSONAL" = COALESCE($3, "DESCRIPCION_PERSONAL")
         WHERE "ID_CLIENTE" = $4
       `, [genero, estado_cliente, descripcion_personal, idPersona])
     }
 
-    if (t === 'miembro') {
+    if (t === 'miembro' && id_nivel) {
       await db.query(`
         UPDATE public."MIEMBRO"
-        SET "NUMERO_MIEMBRO" = $1, "ID_NIVEL" = $2,
-            "PUNTOS_FIDELIDAD" = $3, "FECHA_INICIO" = $4
-        WHERE "ID_CLIENTE" = $5
-      `, [numero_miembro, id_nivel, puntos_fidelidad, fecha_inicio, idPersona])
+        SET "ID_NIVEL" = $1, "PUNTOS_FIDELIDAD" = COALESCE($2, "PUNTOS_FIDELIDAD")
+        WHERE "ID_CLIENTE" = $3
+      `, [id_nivel, puntos_fidelidad, idPersona])
     }
 
     res.json({ message: 'Usuario actualizado correctamente' })
