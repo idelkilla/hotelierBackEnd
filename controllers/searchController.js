@@ -33,8 +33,7 @@ export const getUbicaciones = async (req, res) => {
                 c."NOMBRE"       as ciudad,
                 p."NOMBRE"       as pais,
                 u."ID_TIPO"      as id_tipo,
-                tu."NOMBRE"      as tipo_nombre,
-                tu."ICONO"       as icono
+                COALESCE(tu."NOMBRE", 'Ubicación') as tipo_nombre
             FROM public."UBICACION" u
             LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
             LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
@@ -50,15 +49,15 @@ export const getUbicaciones = async (req, res) => {
         
         // Log para debug
         if (rows.length > 0) {
-            console.log('🔍 Primeros 3 resultados:')
+            console.log('✅ Primeros 3 resultados:')
             rows.slice(0, 3).forEach(r => {
-                console.log(`  - ${r.ubicacion} (ID_TIPO: ${r.id_tipo}, Icono: ${r.icono})`)
+                console.log(`  - ${r.ubicacion} (Tipo: ${r.tipo_nombre})`)
             })
         }
         
         res.json(rows)
     } catch (err) {
-        console.error('❌ Error en getUbicaciones:', err.message)
+        console.error('❌ Error CRÍTICO en getUbicaciones:', err)
         res.status(500).json({ error: err.message, stack: err.stack })
     }
 }
@@ -85,13 +84,12 @@ export const getAeropuertos = async (req, res) => {
                 c."NOMBRE"       as ciudad,
                 p."NOMBRE"       as pais,
                 u."ID_TIPO"      as id_tipo,
-                tu."NOMBRE"      as tipo_nombre,
-                tu."ICONO"       as icono
+                COALESCE(tu."NOMBRE", 'Aeropuerto') as tipo_nombre
             FROM public."UBICACION" u
             LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
             LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
             LEFT JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
-            WHERE (u."ID_TIPO" = 1 OR tu."NOMBRE" ILIKE '%aeropuerto%')
+            WHERE (u."ID_TIPO" = 1 OR tu."NOMBRE" ILIKE '%aeropuerto%' OR u."NOMBRE" ILIKE '%aeropuerto%')
               AND (u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
             ORDER BY u."NOMBRE"
             LIMIT 20
@@ -100,7 +98,7 @@ export const getAeropuertos = async (req, res) => {
         console.log(`✅ ${rows.length} resultado(s) encontrado(s)`)
         res.json(rows)
     } catch (err) {
-        console.error('❌ Error en getAeropuertos:', err.message)
+        console.error('❌ Error CRÍTICO en getAeropuertos:', err)
         res.status(500).json({ error: err.message, stack: err.stack })
     }
 }
