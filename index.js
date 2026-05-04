@@ -9,7 +9,6 @@ import authRoutes from './routes/authRoutes.js'
 import searchRoutes from './routes/searchRoutes.js'
 import userRoutes from './routes/userRoutes.js'
 import hospedajesRouter from './routes/hospedajes.js'
-import clientesRoutes from './routes/clientes.js'
 import dashboardRouter from './routes/dashboard.js'
 import catalogosRouter from './routes/catalogos.js'
 import usuariosRouter from './routes/usuarios.js'
@@ -70,15 +69,9 @@ app.use('/api/hospedajes', hospedajesRouter)
 app.use('/api/catalogos', catalogosRouter)
 app.use('/api/hospedaje', hospedajeDetalleRoutes)
 app.use('/api/reservas', reservasRouter)
-app.use('/api/usuarios', usuariosRouter)
+app.use('/api/usuarios', usuariosRouter) // ✅ CORRECTO - Solo una ruta
 app.use('/api/dashboard', dashboardRouter)
 app.use('/api/habitaciones', habitacionesRoutes)
-
-// Alias routes for EditarUsuarioPanel
-app.use('/api/empleados', userRoutes)
-app.use('/api/clientes', clientesRoutes)
-app.use('/api/miembros', clientesRoutes)
-
 
 // Borrador de hospedajes
 const borradores = new Map()
