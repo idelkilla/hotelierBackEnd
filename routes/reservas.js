@@ -17,15 +17,17 @@ router.get('/', async (_req, res, next) => {
         r."FECHA_FIN",
         r."ID_ESTADO",
         r."ID_EMPLEADO",
+        r."ID_ORIGEN",
+        r."ID_DESTINO",
         er."ESTADO"                             AS estado_nombre,
         p."NOMBRE_COMPLETO"                     AS cliente_nombre,
         uo."NOMBRE"                             AS origen_nombre,
         ud."NOMBRE"                             AS destino_nombre,
         pe."NOMBRE_COMPLETO"                    AS empleado_nombre
       FROM public."RESERVA" r
-      JOIN public."ESTADO_RESERVA" er ON er."ID_ESTADO" = r."ID_ESTADO"
-      JOIN public."CLIENTE" c         ON c."ID_CLIENTE" = r."ID_CLIENTE"
-      JOIN public."PERSONA" p         ON p."ID_PERSONA" = c."ID_CLIENTE"
+      LEFT JOIN public."ESTADO_RESERVA" er ON er."ID_ESTADO" = r."ID_ESTADO"
+      LEFT JOIN public."CLIENTE" c         ON c."ID_CLIENTE" = r."ID_CLIENTE"
+      LEFT JOIN public."PERSONA" p         ON p."ID_PERSONA" = c."ID_CLIENTE"
       LEFT JOIN public."EMPLEADO" em  ON em."ID_EMPLEADO" = r."ID_EMPLEADO"
       LEFT JOIN public."PERSONA" pe   ON pe."ID_PERSONA" = em."ID_PERSONA"
       LEFT JOIN public."UBICACION" uo ON uo."ID_UBICACION" = r."ID_ORIGEN"
@@ -68,10 +70,15 @@ router.get('/:id/detalles', async (req, res, next) => {
  */
 router.patch('/:id/estado', async (req, res, next) => {
   const { id } = req.params
-  const { ID_ESTADO } = req.body
-  if (!id || ID_ESTADO === undefined) {
-    return res.status(400).json({ message: 'ID de reserva o nuevo estado faltante' })
+  let { ID_ESTADO } = req.body
+
+  if (!id || ID_ESTADO === undefined || ID_ESTADO === null) {
+    return res.status(400).json({ 
+      message: 'ID de reserva o nuevo estado faltante',
+      received: { id, ID_ESTADO }
+    })
   }
+
   try {
     await db.query(`
         UPDATE public."RESERVA"
