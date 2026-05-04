@@ -12,17 +12,22 @@ router.get('/', async (_req, res, next) => {
   try {
     const { rows } = await db.query(`
       SELECT
-        r."ID_RESERVA"                         AS id_reserva,
-        r."FECHA_INICIO"                        AS fecha_inicio,
-        r."FECHA_FIN"                           AS fecha_fin,
-        er."ESTADO"                             AS estado,
+        r."ID_RESERVA",
+        r."FECHA_INICIO",
+        r."FECHA_FIN",
+        r."ID_ESTADO",
+        r."ID_EMPLEADO",
+        er."ESTADO"                             AS estado_nombre,
         p."NOMBRE_COMPLETO"                     AS cliente_nombre,
-        uo."NOMBRE"                             AS origen,
-        ud."NOMBRE"                             AS destino
+        uo."NOMBRE"                             AS origen_nombre,
+        ud."NOMBRE"                             AS destino_nombre,
+        pe."NOMBRE_COMPLETO"                    AS empleado_nombre
       FROM public."RESERVA" r
       JOIN public."ESTADO_RESERVA" er ON er."ID_ESTADO" = r."ID_ESTADO"
       JOIN public."CLIENTE" c         ON c."ID_CLIENTE" = r."ID_CLIENTE"
       JOIN public."PERSONA" p         ON p."ID_PERSONA" = c."ID_CLIENTE"
+      LEFT JOIN public."EMPLEADO" em  ON em."ID_EMPLEADO" = r."ID_EMPLEADO"
+      LEFT JOIN public."PERSONA" pe   ON pe."ID_PERSONA" = em."ID_PERSONA"
       LEFT JOIN public."UBICACION" uo ON uo."ID_UBICACION" = r."ID_ORIGEN"
       LEFT JOIN public."UBICACION" ud ON ud."ID_UBICACION" = r."ID_DESTINO"
       ORDER BY r."FECHA_INICIO" DESC

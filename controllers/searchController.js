@@ -163,7 +163,7 @@ export const postBuscarHospedaje = async (req, res) => {
             INNER JOIN public."UBICACION" u ON u."ID_UBICACION" = hos."ID_UBICACION"
             LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
             LEFT JOIN public."PAIS" p ON c."ID_PAIS" = p."ID_PAIS"
-            INNER JOIN public."HABITACION" hab ON hab."ID_HOSPEDAJE" = hos."ID_HOSPEDAJE"
+            LEFT JOIN public."HABITACION" hab ON hab."ID_HOSPEDAJE" = hos."ID_HOSPEDAJE"
             LEFT JOIN public."RESENA" r ON r."ID_SERVICIO" = s."ID_SERVICIO"
             WHERE 
                 (
@@ -173,12 +173,11 @@ export const postBuscarHospedaje = async (req, res) => {
                     OR c."NOMBRE" ILIKE $1 
                     OR p."NOMBRE" ILIKE $1
                 )
-                AND hab."CAPACIDAD_ADULTO" >= $2
-                AND hab."CAPACIDAD_NINOS" >= $3
+                AND (hab."CAPACIDAD_ADULTO" >= $2 OR hab."CAPACIDAD_ADULTO" IS NULL)
+                AND (hab."CAPACIDAD_NINOS" >= $3 OR hab."CAPACIDAD_NINOS" IS NULL)
             GROUP BY 
                 s."ID_SERVICIO", s."NOMBRE", u."NOMBRE", hos."ID_TIPO",
                 c."NOMBRE", p."NOMBRE", th."NOMBRE_TIPO"
-            HAVING COUNT(hab."ID_HABITACION") > 0
             ORDER BY precio_min ASC
             LIMIT 50
         `, [textoBusqueda, maxAdultos, maxNinos])

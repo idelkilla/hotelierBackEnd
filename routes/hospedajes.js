@@ -26,30 +26,30 @@ router.get('/', async (_req, res, next) => {
   try {
     const { rows } = await db.query(`
       SELECT
-        s."ID_SERVICIO"                           AS id_hospedaje,
-        s."NOMBRE"                                AS nombre,
-        th."NOMBRE_TIPO"                          AS tipo_hospedaje,
-        u."NOMBRE"                                AS ubicacion,
-        ci."NOMBRE"                               AS ciudad,
-        pa."NOMBRE"                               AS pais,
+        s."ID_SERVICIO"                           AS "ID_HOSPEDAJE",
+        s."NOMBRE"                                AS "NOMBRE",
+        th."NOMBRE_TIPO"                          AS "TIPO_HOSPEDAJE",
+        u."NOMBRE"                                AS "UBICACION",
+        ci."NOMBRE"                               AS "CIUDAD",
+        pa."NOMBRE"                               AS "PAIS",
         hos."CHECKIN",
         hos."CHECKOUT",
         hos."MASCOTAS",
         hos."FUMAR",
         hos."DESCRIPCION",
-        ROUND(AVG(re."CALIFICACION")::NUMERIC, 1) AS calificacion,
-        COUNT(DISTINCT re."ID_RESENA")            AS total_resenas,
-        MIN(hab."PRECIO_NOCHE")                   AS precio_min,
+        ROUND(AVG(re."CALIFICACION")::NUMERIC, 1) AS "CALIFICACION",
+        COUNT(DISTINCT re."ID_RESENA")            AS "TOTAL_RESENAS",
+        MIN(hab."PRECIO_NOCHE")                   AS "PRECIO_MIN",
         (SELECT img."URL"
          FROM public."IMAGEN_HOSPEDAJE" img
          WHERE img."ID_HOSPEDAJE" = s."ID_SERVICIO"
-         ORDER BY img."ORDEN" ASC LIMIT 1)        AS imagen_portada
+         ORDER BY img."ORDEN" ASC LIMIT 1)        AS "IMAGEN_PORTADA"
       FROM public."SERVICIO" s
-      JOIN public."HOSPEDAJE" hos        ON hos."ID_HOSPEDAJE" = s."ID_SERVICIO"
-      JOIN public."TIPO_HOSPEDAJE" th    ON th."ID_TIPO"       = hos."ID_TIPO"
-      JOIN public."UBICACION" u          ON u."ID_UBICACION"   = hos."ID_UBICACION"
-      JOIN public."CIUDAD" ci            ON ci."ID_CIUDAD"     = u."ID_CIUDAD"
-      JOIN public."PAIS" pa              ON pa."ID_PAIS"       = ci."ID_PAIS"
+      LEFT JOIN public."HOSPEDAJE" hos   ON hos."ID_HOSPEDAJE" = s."ID_SERVICIO"
+      LEFT JOIN public."TIPO_HOSPEDAJE" th ON th."ID_TIPO"     = hos."ID_TIPO"
+      LEFT JOIN public."UBICACION" u     ON u."ID_UBICACION"   = hos."ID_UBICACION"
+      LEFT JOIN public."CIUDAD" ci       ON ci."ID_CIUDAD"     = u."ID_CIUDAD"
+      LEFT JOIN public."PAIS" pa         ON pa."ID_PAIS"       = ci."ID_PAIS"
       LEFT JOIN public."HABITACION" hab  ON hab."ID_HOSPEDAJE" = hos."ID_HOSPEDAJE"
       LEFT JOIN public."RESENA" re       ON re."ID_SERVICIO"   = s."ID_SERVICIO"
       GROUP BY
@@ -82,7 +82,7 @@ router.get('/:id', async (req, res, next) => {
   const { id } = req.params
   try {
     const { rows: h } = await db.query(`
-      SELECT s."NOMBRE", h.*, c."ID_PAIS"
+      SELECT s."NOMBRE", h.*, u."NOMBRE" AS "NOMBRE_UBICACION", u."LATITUD", u."LONGITUD", c."ID_PAIS"
       FROM public."HOSPEDAJE" h
       JOIN public."SERVICIO" s ON s."ID_SERVICIO" = h."ID_HOSPEDAJE"
       JOIN public."UBICACION" u ON u."ID_UBICACION" = h."ID_UBICACION"
@@ -99,6 +99,24 @@ router.get('/:id', async (req, res, next) => {
       habitaciones: habs,
       amenidades: amens
     })
+  } catch (err) { next(err) }
+})
+
+/**
+ * POST /api/hospedajes/:id/habitaciones
+ * Creación masiva de habitaciones para un hospedaje
+ */
+router.post('/:id/habitaciones', async (req, res, next) => {
+  const { id } = req.params
+  const habitaciones = req.body // Array de habitaciones
+  try {
+    for (const hab of habitaciones) {
+      await db.query(`
+        INSERT INTO public."HABITACION" ("ID_HOSPEDAJE", "ID_TIPO_HABITACION", "CAPACIDAD_ADULTO", "CAPACIDAD_NINOS", "PRECIO_NOCHE")
+        VALUES ($1, $2, $3, $4, $5)
+      `, [id, hab.id_tipo_habitacion, hab.capacidad_adulto, hab.capacidad_ninos, hab.precio_noche])
+    }
+    res.status(201).json({ message: 'Habitaciones creadas' })
   } catch (err) { next(err) }
 })
 
@@ -143,18 +161,32 @@ router.delete('/:id', async (req, res, next) => {
 
 /**
  * POST /api/hospedajes
- * Compatible con adminAgregarHotel.vue (JSON)
+ * Crea un hospedaje completo (Servicio + Ubicación + Hospedaje)
  */
 router.post('/', async (req, res, next) => {
   const client = await db.getPool().connect()
-  
   try {
     await client.query('BEGIN')
-    
-    // 1. Extraer datos (Multer pone los campos de texto en req.body)
-    const data = JSON.parse(req.body.data)
-    
-    // 2. Insertar en SERVICIO y HOSPEDAJE
+
+    const data = req.body
+
+    // 1. Insertar Ubicación primero si viene en el payload como objeto
+    let idUbicacion = data.id_ubicacion
+    if (data.ubicacion && !idUbicacion) {
+      const { rows: ubRows } = await client.query(`
+        INSERT INTO public."UBICACION" ("NOMBRE", "LATITUD", "LONGITUD", "ID_CIUDAD", "ID_TIPO")
+        VALUES ($1, $2, $3, $4, $5) RETURNING "ID_UBICACION"
+      `, [
+        data.ubicacion.nombre,
+        data.ubicacion.latitud,
+        data.ubicacion.longitud,
+        data.ubicacion.id_ciudad,
+        2 // Tipo 2 = Hotel/Alojamiento
+      ])
+      idUbicacion = ubRows[0].ID_UBICACION
+    }
+
+    // 2. Insertar en SERVICIO
     const { rows: srv } = await client.query(`
       INSERT INTO public."SERVICIO" ("NOMBRE", "ID_PROVEEDOR") 
       VALUES ($1, $2) RETURNING "ID_SERVICIO"
@@ -162,34 +194,23 @@ router.post('/', async (req, res, next) => {
 
     const idHospedaje = srv[0].ID_SERVICIO
 
+    // 3. Insertar en HOSPEDAJE
     await client.query(`
       INSERT INTO public."HOSPEDAJE" 
       ("ID_HOSPEDAJE", "DESCRIPCION", "CHECKIN", "CHECKOUT", "CANCELACION", "MASCOTAS", "FUMAR", "ID_TIPO", "ID_UBICACION")
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `, [
       idHospedaje, data.descripcion, data.checkin, data.checkout, 
-      data.cancelacion, data.mascotas, data.fumar, data.id_tipo_hospedaje, data.id_ubicacion
+      data.cancelacion, data.mascotas, data.fumar, data.id_tipo_hospedaje, idUbicacion
     ])
-
-    // 3. Guardar URLs de las imágenes en IMAGEN_HOSPEDAJE
-    if (req.files && req.files.length > 0) {
-      for (let i = 0; i < req.files.length; i++) {
-        const url = `${req.protocol}://${req.get('host')}/uploads/${req.files[i].filename}`
+    
+    // 4. Insertar amenidades
+    if (data.servicios_incluidos && Array.isArray(data.servicios_incluidos)) {
+      for (const idServ of data.servicios_incluidos) {
         await client.query(`
-          INSERT INTO public."IMAGEN_HOSPEDAJE" ("ID_HOSPEDAJE", "URL", "ORDEN")
-          VALUES ($1, $2, $3)
-        `, [idHospedaje, url, i])
-      }
-    }
-
-    // 4. Insertar habitaciones
-    if (data.habitaciones && data.habitaciones.length > 0) {
-      for (const hab of data.habitaciones) {
-        await client.query(`
-          INSERT INTO public."HABITACION" 
-          ("ID_HOSPEDAJE", "ID_TIPO_HABITACION", "CAPACIDAD_ADULTO", "CAPACIDAD_NINOS", "PRECIO_NOCHE")
-          VALUES ($1, $2, $3, $4, $5)
-        `, [idHospedaje, hab.id_tipo_habitacion, hab.capacidad_adulto, hab.capacidad_ninos, hab.precio_noche])
+          INSERT INTO public."HOSPEDAJE_SERVICIO" ("ID_HOSPEDAJE", "ID_SERVICIO_INCLUIDO")
+          VALUES ($1, $2)
+        `, [idHospedaje, idServ])
       }
     }
 
