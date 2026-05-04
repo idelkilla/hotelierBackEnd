@@ -31,7 +31,7 @@ const authController = {
       const { rows } = await db.query(
         `SELECT u."ID_USUARIO", u."USUARIO", u."CORREO_ELECTRONICO", u."CONTRASENA", u."GOOGLE_ID", e."ID_EMPLEADO"
          FROM public."USUARIO" u 
-         LEFT JOIN public."EMPLEADO" e ON e."ID_PERSONA" = u."ID_PERSONA"
+         LEFT JOIN public."EMPLEADO" e ON e."ID_EMPLEADO" = u."ID_PERSONA"
          WHERE "CORREO_ELECTRONICO" = $1 OR "USUARIO" = $1`,
         [identifier]
       )
@@ -150,7 +150,7 @@ const authController = {
       const { rows: existing } = await db.query(
         `SELECT u."ID_USUARIO", u."USUARIO", u."CORREO_ELECTRONICO", u."GOOGLE_ID", e."ID_EMPLEADO"
          FROM public."USUARIO" u 
-         LEFT JOIN public."EMPLEADO" e ON e."ID_PERSONA" = u."ID_PERSONA"
+         LEFT JOIN public."EMPLEADO" e ON e."ID_EMPLEADO" = u."ID_PERSONA"
          WHERE u."CORREO_ELECTRONICO" = $1`,
         [email.toLowerCase()]
       )
