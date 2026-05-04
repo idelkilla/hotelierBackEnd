@@ -14,6 +14,7 @@ import dashboardRouter from './routes/dashboard.js'
 import catalogosRoutes from './routes/catalogos.js'
 import hospedajeDetalleRoutes from './routes/hospedajeDetalle.js'
 import reservasRouter from './routes/reservas.js'
+import usuariosRouter from './routes/usuarios.js'
 import habitacionesRoutes from './routes/habitaciones.js'
 import errorHandler from './middleware/errorHandler.js'
 
@@ -69,6 +70,7 @@ app.use('/api/hospedajes', hospedajesRouter)
 app.use('/api/catalogos', catalogosRoutes)
 app.use('/api/hospedaje', hospedajeDetalleRoutes)
 app.use('/api/reservas', reservasRouter)
+app.use('/api/usuarios', usuariosRouter)
 app.use('/api/dashboard', dashboardRouter)
 app.use('/api/habitaciones', habitacionesRoutes)
 
