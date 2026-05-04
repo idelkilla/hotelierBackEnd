@@ -1,8 +1,6 @@
 import jwt from 'jsonwebtoken'
 
-export const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization']
-  const token = authHeader && authHeader.split(' ')[1] // "Bearer <token>"
+export const authenticateToken = (req, res, next) => { //
 
   console.log('🔍 [AUTH] Header:', authHeader ? 'Present' : 'MISSING')
   console.log('🔍 [AUTH] Token:', token ? `${token.slice(0,20)}...` : 'NO TOKEN')
@@ -16,7 +14,7 @@ export const authenticateToken = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    console.log('✅ [AUTH] Token valid → user:', decoded.id, decoded.role)
+    console.log('✅ [AUTH] Token valid → user:', decoded.id, decoded.role) //
     req.user = decoded // { id: ..., role: ... }
     next()
   } catch (err) {
@@ -32,7 +30,7 @@ export const authenticateToken = (req, res, next) => {
 
 export const authenticateAdmin = (req, res, next) => {
   authenticateToken(req, res, () => {
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'admin') { //
       return res.status(403).json({ error: 'Acceso denegado: Se requiere rol de administrador' });
     }
     next();

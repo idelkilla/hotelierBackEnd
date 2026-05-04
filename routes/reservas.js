@@ -29,7 +29,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
       FROM public."RESERVA" r
       LEFT JOIN public."ESTADO_RESERVA" er ON er."ID_ESTADO" = r."ID_ESTADO"
       LEFT JOIN public."CLIENTE" c         ON c."ID_CLIENTE" = r."ID_CLIENTE"
-      LEFT JOIN public."PERSONA" p         ON p."ID_PERSONA" = c."ID_CLIENTE"
+      LEFT JOIN public."PERSONA" p         ON p."ID_PERSONA" = c."ID_PERSONA"
       LEFT JOIN public."EMPLEADO" em  ON em."ID_EMPLEADO" = r."ID_EMPLEADO"
       LEFT JOIN public."PERSONA" pe   ON pe."ID_PERSONA" = em."ID_PERSONA"
       LEFT JOIN public."UBICACION" uo ON uo."ID_UBICACION" = r."ID_ORIGEN"
@@ -73,9 +73,9 @@ router.get('/:id/detalles', async (req, res, next) => {
  */
 router.patch('/:id/estado', async (req, res, next) => {
   const { id } = req.params
-  const ID_ESTADO = Number(req.body?.ID_ESTADO) // Coerción para manejar strings "0"
+  const ID_ESTADO = Number(req.body?.ID_ESTADO) // ✅ coerce, handles string "0"
 
-  if (!id || isNaN(ID_ESTADO)) { // Validación más robusta
+  if (!id || isNaN(ID_ESTADO)) {                 // ✅ cleaner guard
     return res.status(400).json({ 
       message: 'ID de reserva o nuevo estado faltante',
       received: { id, ID_ESTADO: req.body?.ID_ESTADO }

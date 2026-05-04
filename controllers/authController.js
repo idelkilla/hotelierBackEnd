@@ -19,18 +19,19 @@ const authController = {
   // ✅ LOGIN
   login: async (req, res) => {
     try {
-      const { email, password } = req.body
+      const { email, usuarioOrEmail, password } = req.body
+      const identifier = (email || usuarioOrEmail || '').toLowerCase()
 
-      if (!email || !password)
+      if (!identifier || !password)
         return res.status(400).json({ message: 'Email y contraseña son requeridos' })
 
       const db = getPool()
       const { rows } = await db.query(
         `SELECT u."ID_USUARIO", u."USUARIO", u."CORREO_ELECTRONICO", u."CONTRASENA", u."GOOGLE_ID", e."ID_EMPLEADO"
-         FROM public."USUARIO" u
+         FROM public."USUARIO" u 
          LEFT JOIN public."EMPLEADO" e ON e."ID_PERSONA" = u."ID_PERSONA"
-         WHERE "CORREO_ELECTRONICO" = $1`,
-        [email.toLowerCase()]
+         WHERE "CORREO_ELECTRONICO" = $1 OR "USUARIO" = $1`,
+        [identifier]
       )
       const user = rows[0]
 
@@ -146,7 +147,7 @@ const authController = {
 
       const { rows: existing } = await db.query(
         `SELECT u."ID_USUARIO", u."USUARIO", u."CORREO_ELECTRONICO", u."GOOGLE_ID", e."ID_EMPLEADO"
-         FROM public."USUARIO" u
+         FROM public."USUARIO" u 
          LEFT JOIN public."EMPLEADO" e ON e."ID_PERSONA" = u."ID_PERSONA"
          WHERE u."CORREO_ELECTRONICO" = $1`,
         [email.toLowerCase()]
