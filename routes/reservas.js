@@ -37,7 +37,6 @@ router.get('/', async (_req, res, next) => {
     `)
     res.json(rows)
   } catch (err) {
-    console.error('Error en GET /api/reservas:', err)
     next(err)
   }
 })
@@ -61,7 +60,6 @@ router.get('/:id/detalles', async (req, res, next) => {
     `, [id])
     res.json(rows)
   } catch (err) {
-    console.error(`Error en GET /api/reservas/${id}/detalles:`, err)
     next(err)
   }
 })
@@ -74,11 +72,10 @@ router.patch('/:id/estado', async (req, res, next) => {
   const { id } = req.params
   let { ID_ESTADO } = req.body
 
-  // Validamos que el ID y el nuevo estado no sean nulos o vacíos
-  if (!id || ID_ESTADO === undefined || ID_ESTADO === null || ID_ESTADO === "") {
+  if (!id || ID_ESTADO === undefined || ID_ESTADO === null) {
     return res.status(400).json({ 
       message: 'ID de reserva o nuevo estado faltante',
-      received: { id, ID_ESTADO, body: req.body }
+      received: { id, ID_ESTADO }
     })
   }
 
@@ -90,7 +87,6 @@ router.patch('/:id/estado', async (req, res, next) => {
     `, [ID_ESTADO, id])
     res.json({ message: 'Estado actualizado correctamente' })
   } catch (err) {
-    console.error(`Error en PATCH /api/reservas/${id}/estado:`, err)
     next(err)
   }
 })
