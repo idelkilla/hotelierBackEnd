@@ -14,7 +14,9 @@ router.get('/stats', async (req, res, next) => {
       hospedajes:   'SELECT COUNT(*) FROM public."HOSPEDAJE"',
       reservas:     'SELECT COUNT(*) FROM public."RESERVA"',
       clientes:     'SELECT COUNT(*) FROM public."CLIENTE"',
-      miembros:     'SELECT COUNT(*) FROM public."MIEMBRO"'
+      miembros:     'SELECT COUNT(*) FROM public."MIEMBRO"',
+      actividades:  'SELECT COUNT(*) FROM public."ACTIVIDADES"',
+      habitaciones: 'SELECT COUNT(*) FROM public."HABITACION"'
     }
 
     const stats = {}
@@ -22,6 +24,7 @@ router.get('/stats', async (req, res, next) => {
       const { rows } = await db.query(sql)
       stats[key] = parseInt(rows[0].count, 10)
     }
+    stats.actividad_total = stats.reservas + stats.hospedajes + (stats.actividades || 0)
 
     res.json(stats)
   } catch (err) { next(err) }
