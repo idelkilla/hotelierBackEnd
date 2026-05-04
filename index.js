@@ -15,6 +15,7 @@ import usuariosRouter from './routes/usuarios.js'
 import hospedajeDetalleRoutes from './routes/hospedajeDetalle.js'
 import reservasRouter from './routes/reservas.js'
 import habitacionesRoutes from './routes/habitaciones.js'
+import vuelosRouter from './routes/vuelos.js'
 import errorHandler from './middleware/errorHandler.js'
 
 const app = express()
@@ -71,6 +72,7 @@ app.use('/api/reservas', reservasRouter)
 app.use('/api/usuarios', usuariosRouter) // ✅ CORRECTO - Solo una ruta
 app.use('/api/dashboard', dashboardRouter)
 app.use('/api/habitaciones', habitacionesRoutes)
+app.use('/api/vuelos', vuelosRouter)
 
 // Borrador de hospedajes
 const borradores = new Map()
