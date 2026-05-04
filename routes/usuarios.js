@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as db from '../db.js'
+import bcrypt from 'bcryptjs'
 import { authenticateToken } from '../middleware/authMiddleware.js'
 
 const router = Router()
@@ -117,6 +118,112 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
     res.json(usuario)
   } catch (err) {
     console.error('❌ GET /api/usuarios/:id error:', err.stack)
+    next(err)
+  }
+})
+
+router.put('/:id', authenticateToken, async (req, res, next) => {
+  const { id } = req.params
+  const {
+    nombre_completo, apellidos, correo, usuario,
+    codigo_pais, numero_telefonico, contrasena,
+    // Empleado
+    id_puesto, turno, sueldo, fecha_contratacion,
+    // Cliente
+    genero, estado_cliente, descripcion_personal,
+    // Miembro
+    numero_miembro, id_nivel, puntos_fidelidad, fecha_inicio,
+    tipo
+  } = req.body
+
+  try {
+    // 1. Actualizar USUARIO + PERSONA
+    await db.query(`
+      UPDATE public."USUARIO"
+      SET "CORREO_ELECTRONICO" = $1, "USUARIO" = $2
+      WHERE "ID_USUARIO" = $3
+    `, [correo, usuario, id])
+
+    // Obtener ID_PERSONA
+    const { rows: [u] } = await db.query(
+      `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`, [id]
+    )
+    const idPersona = u?.ID_PERSONA
+    if (!idPersona) return res.status(404).json({ message: 'Usuario no encontrado' })
+
+    await db.query(`
+      UPDATE public."PERSONA"
+      SET "NOMBRE_COMPLETO" = $1, "APELLIDOS" = $2
+      WHERE "ID_PERSONA" = $3
+    `, [nombre_completo, apellidos, idPersona])
+
+    // 2. Contraseña (opcional)
+    if (contrasena) {
+      const hash = await bcrypt.hash(contrasena, 10)
+      await db.query(
+        `UPDATE public."USUARIO" SET "CONTRASENA" = $1 WHERE "ID_USUARIO" = $2`,
+        [hash, id]
+      )
+    }
+
+    // 3. Teléfono
+    if (numero_telefonico) {
+      await db.query(`
+        UPDATE public."TELEFONO"
+        SET "NUMERO_TELEFONICO" = $1, "CODIGO_PAIS" = $2
+        WHERE "ID_PERSONA" = $3 AND "ESTADO_TELEFONO" = 'A'
+      `, [numero_telefonico, codigo_pais || '+1', idPersona])
+    }
+
+    // 4. Datos específicos por tipo
+    const t = tipo?.toLowerCase()
+
+    if (t === 'empleado') {
+      await db.query(`
+        UPDATE public."EMPLEADO_PUESTO"
+        SET "ID_PUESTO" = $1, "SUELDO" = $2
+        WHERE "ID_EMPLEADO" = $3 AND "FECHA_FIN" >= CURRENT_DATE
+      `, [id_puesto, sueldo, idPersona])
+    }
+
+    if (t === 'cliente' || t === 'miembro') {
+      await db.query(`
+        UPDATE public."CLIENTE"
+        SET "GENERO" = $1, "ESTADO_CLIENTE" = $2, "DESCRIPCION_PERSONAL" = $3
+        WHERE "ID_CLIENTE" = $4
+      `, [genero, estado_cliente, descripcion_personal, idPersona])
+    }
+
+    if (t === 'miembro') {
+      await db.query(`
+        UPDATE public."MIEMBRO"
+        SET "NUMERO_MIEMBRO" = $1, "ID_NIVEL" = $2,
+            "PUNTOS_FIDELIDAD" = $3, "FECHA_INICIO" = $4
+        WHERE "ID_CLIENTE" = $5
+      `, [numero_miembro, id_nivel, puntos_fidelidad, fecha_inicio, idPersona])
+    }
+
+    res.json({ message: 'Usuario actualizado correctamente' })
+  } catch (err) {
+    console.error('❌ PUT /api/usuarios/:id error:', err.stack)
+    next(err)
+  }
+})
+
+router.delete('/:id', authenticateToken, async (req, res, next) => {
+  const { id } = req.params
+  try {
+    const { rows: [u] } = await db.query(
+      `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`, [id]
+    )
+    if (!u) return res.status(404).json({ message: 'Usuario no encontrado' })
+
+    // Eliminar en cascada desde USUARIO (ajusta según tus FK)
+    await db.query(`DELETE FROM public."USUARIO" WHERE "ID_USUARIO" = $1`, [id])
+
+    res.json({ message: 'Usuario eliminado' })
+  } catch (err) {
+    console.error('❌ DELETE /api/usuarios/:id error:', err.stack)
     next(err)
   }
 })
