@@ -18,7 +18,10 @@ router.get('/', async (_req, res, next) => {
         c."GENERO"                            AS genero,
         c."FECHA_NACIMIENTO"                  AS fecha_nacimiento,
         nm."NOMBRE_NIVEL"                     AS nivel_membresia,
-        'Cliente'                             AS tipo
+        CASE 
+          WHEN m."ID_CLIENTE" IS NOT NULL THEN 'Miembro'
+          ELSE 'Cliente'
+        END                                   AS tipo
       FROM public."CLIENTE" c
       JOIN public."PERSONA"  p ON p."ID_PERSONA"  = c."ID_CLIENTE"
       JOIN public."USUARIO"  u ON u."ID_PERSONA"  = c."ID_CLIENTE"

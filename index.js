@@ -9,6 +9,8 @@ import authRoutes from './routes/authRoutes.js'
 import searchRoutes from './routes/searchRoutes.js'
 import userRoutes from './routes/userRoutes.js'
 import hospedajesRouter from './routes/hospedajes.js'
+import clientesRoutes from './routes/clientes.js'
+import dashboardRouter from './routes/dashboard.js'
 import catalogosRoutes from './routes/catalogos.js'
 import hospedajeDetalleRoutes from './routes/hospedajeDetalle.js'
 import reservasRouter from './routes/reservas.js'
@@ -67,13 +69,13 @@ app.use('/api/hospedajes', hospedajesRouter)
 app.use('/api/catalogos', catalogosRoutes)
 app.use('/api/hospedaje', hospedajeDetalleRoutes)
 app.use('/api/reservas', reservasRouter)
-app.use('/api/dashboard', hospedajesRouter)
+app.use('/api/dashboard', dashboardRouter)
 app.use('/api/habitaciones', habitacionesRoutes)
 
 // Alias routes for EditarUsuarioPanel
 app.use('/api/empleados', userRoutes)
-app.use('/api/clientes', userRoutes)
-app.use('/api/miembros', userRoutes)
+app.use('/api/clientes', clientesRoutes)
+app.use('/api/miembros', clientesRoutes)
 
 
 // Borrador de hospedajes
