@@ -27,7 +27,7 @@ router.get('/', async (_req, res, next) => {
       FROM public."RESERVA" r
       LEFT JOIN public."ESTADO_RESERVA" er ON er."ID_ESTADO" = r."ID_ESTADO"
       LEFT JOIN public."CLIENTE" c         ON c."ID_CLIENTE" = r."ID_CLIENTE"
-      LEFT JOIN public."PERSONA" p         ON p."ID_PERSONA" = c."ID_PERSONA"
+      LEFT JOIN public."PERSONA" p         ON p."ID_PERSONA" = c."ID_CLIENTE"
       LEFT JOIN public."EMPLEADO" em  ON em."ID_EMPLEADO" = r."ID_EMPLEADO"
       LEFT JOIN public."PERSONA" pe   ON pe."ID_PERSONA" = em."ID_PERSONA"
       LEFT JOIN public."UBICACION" uo ON uo."ID_UBICACION" = r."ID_ORIGEN"
