@@ -5,8 +5,13 @@ import { authenticateToken } from '../middleware/authMiddleware.js'
 
 const router = Router()
 
-// GET /api/usuarios — listado unificado empleados + clientes + miembros
+/**
+ * GET /api/usuarios?tipo=todos|empleado|cliente|miembro
+ * Lista unificada con filtro opcional
+ */
 router.get('/', authenticateToken, async (req, res, next) => {
+  const tipoFiltro = (req.query.tipo || 'todos').toLowerCase()
+
   try {
     const { rows } = await db.query(`
       SELECT
@@ -22,23 +27,82 @@ router.get('/', authenticateToken, async (req, res, next) => {
           ELSE 'Usuario'
         END                                   AS tipo,
         COALESCE(c."ESTADO_CLIENTE", 'A')     AS estado,
-        nm."NOMBRE_NIVEL"                     AS nivel_membresia
+        nm."NOMBRE_NIVEL"                     AS nivel_membresia,
+        c."FECHA_REGISTRO"                    AS fecha_registro
       FROM public."USUARIO" u
       LEFT JOIN public."PERSONA"  p  ON p."ID_PERSONA"  = u."ID_PERSONA"
       LEFT JOIN public."EMPLEADO" e  ON e."ID_EMPLEADO" = u."ID_PERSONA"
-      LEFT JOIN public."CLIENTE"  c  ON c."ID_CLIENTE"  = u."ID_PERSONA" -- ✅ CORRECTO: CLIENTE y MIEMBRO usan ID_CLIENTE como PK
+      LEFT JOIN public."CLIENTE"  c  ON c."ID_CLIENTE"  = u."ID_PERSONA"
       LEFT JOIN public."MIEMBRO"  m  ON m."ID_CLIENTE"  = u."ID_PERSONA"
       LEFT JOIN public."NIVEL_MEMBRESIA" nm ON nm."ID_NIVEL" = m."ID_NIVEL"
       ORDER BY u."ID_USUARIO" DESC
     `)
-    res.json(rows)
+
+    // 🔥 FILTRAR EN EL BACKEND (mejor para performance)
+    let resultado = rows
+    if (tipoFiltro !== 'todos') {
+      resultado = rows.filter(u => u.tipo.toLowerCase() === tipoFiltro)
+    }
+
+    res.json(resultado)
   } catch (err) {
     console.error('❌ GET /api/usuarios error:', err.stack)
     next(err)
   }
 })
 
-// GET /api/usuarios/:id?tipo=empleado|cliente|miembro
+/**
+ * GET /api/usuarios/buscar?q=texto&tipo=cliente
+ * Búsqueda con filtro de tipo
+ */
+router.get('/buscar', authenticateToken, async (req, res, next) => {
+  const q = (req.query.q || '').trim()
+  const tipoFiltro = (req.query.tipo || 'todos').toLowerCase()
+
+  if (!q) return res.json([])
+
+  try {
+    const { rows } = await db.query(`
+      SELECT
+        u."ID_USUARIO"                        AS id,
+        COALESCE(p."NOMBRE_COMPLETO", u."USUARIO") AS nombre,
+        u."CORREO_ELECTRONICO"                AS correo,
+        CASE
+          WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'Empleado'
+          WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'Miembro'
+          WHEN c."ID_CLIENTE"  IS NOT NULL THEN 'Cliente'
+          ELSE 'Usuario'
+        END                                   AS tipo
+      FROM public."USUARIO" u
+      LEFT JOIN public."PERSONA"  p  ON p."ID_PERSONA"  = u."ID_PERSONA"
+      LEFT JOIN public."EMPLEADO" e  ON e."ID_EMPLEADO" = u."ID_PERSONA"
+      LEFT JOIN public."CLIENTE"  c  ON c."ID_CLIENTE"  = u."ID_PERSONA"
+      LEFT JOIN public."MIEMBRO"  m  ON m."ID_CLIENTE"  = u."ID_PERSONA"
+      WHERE
+        p."NOMBRE_COMPLETO" ILIKE $1
+        OR u."CORREO_ELECTRONICO" ILIKE $1
+        OR u."USUARIO" ILIKE $1
+      ORDER BY p."NOMBRE_COMPLETO"
+      LIMIT 20
+    `, [`%${q}%`])
+
+    // Filtrar por tipo si es necesario
+    let resultado = rows
+    if (tipoFiltro !== 'todos') {
+      resultado = rows.filter(u => u.tipo.toLowerCase() === tipoFiltro)
+    }
+
+    res.json(resultado)
+  } catch (err) {
+    console.error('❌ GET /api/usuarios/buscar error:', err.stack)
+    next(err)
+  }
+})
+
+/**
+ * GET /api/usuarios/:id?tipo=empleado|cliente|miembro
+ * Detalle individual
+ */
 router.get('/:id', authenticateToken, async (req, res, next) => {
   const { id } = req.params
   const tipo = (req.query.tipo || '').toLowerCase()
