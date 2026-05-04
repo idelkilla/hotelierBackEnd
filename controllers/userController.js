@@ -1,9 +1,5 @@
 import { getPool } from '../db.js'
 
-/**
- * GET /api/usuarios
- * Listado unificado de Empleados, Clientes y Miembros para Admin
- */
 export const getUsers = async (req, res, next) => {
   try {
     const pool = getPool()
@@ -29,7 +25,8 @@ export const getUsers = async (req, res, next) => {
     `)
     res.json(rows)
   } catch (error) {
-    next(error)
+    console.error('❌ /api/usuarios query error:', error.message)
+    res.status(400).json({ error: 'Error consultando usuarios', detail: error.message })
   }
 }
 

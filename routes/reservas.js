@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as db from '../db.js'
+import { authenticateToken } from '../middleware/authMiddleware.js'
 
 const router = Router()
 
@@ -8,7 +9,8 @@ const router = Router()
  * Obtiene el listado completo de reservas con nombres de clientes, 
  * ubicaciones y estados procesados.
  */
-router.get('/', async (_req, res, next) => {
+router.get('/', authenticateToken, async (req, res, next) => {
+  console.log('🔍 GET /api/reservas → user:', req.user?.email || 'no-auth')
   try {
     const { rows } = await db.query(`
       SELECT
@@ -37,7 +39,8 @@ router.get('/', async (_req, res, next) => {
     `)
     res.json(rows)
   } catch (err) {
-    next(err)
+    console.error('❌ /api/reservas query error:', err.message)
+    res.status(400).json({ error: 'Error consultando reservas', detail: err.message })
   }
 })
 
@@ -70,9 +73,9 @@ router.get('/:id/detalles', async (req, res, next) => {
  */
 router.patch('/:id/estado', async (req, res, next) => {
   const { id } = req.params
-  const ID_ESTADO = Number(req.body?.ID_ESTADO)
+  const ID_ESTADO = Number(req.body?.ID_ESTADO) // Coerción para manejar strings "0"
 
-  if (!id || isNaN(ID_ESTADO)) {
+  if (!id || isNaN(ID_ESTADO)) { // Validación más robusta
     return res.status(400).json({ 
       message: 'ID de reserva o nuevo estado faltante',
       received: { id, ID_ESTADO: req.body?.ID_ESTADO }

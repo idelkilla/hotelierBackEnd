@@ -5,8 +5,8 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import { OAuth2Client } from 'google-auth-library'
 
-const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '7d' })
+const generateToken = (userId, role = 'user') => {
+  return jwt.sign({ id: userId, role }, process.env.JWT_SECRET, { expiresIn: '7d' })
 }
 
 const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '128715608979-nffc56ns9uagf29p7j9em6vmm6mrkidv.apps.googleusercontent.com')
@@ -26,8 +26,9 @@ const authController = {
 
       const db = getPool()
       const { rows } = await db.query(
-        `SELECT "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO", "CONTRASENA", "GOOGLE_ID"
-         FROM public."USUARIO"
+        `SELECT u."ID_USUARIO", u."USUARIO", u."CORREO_ELECTRONICO", u."CONTRASENA", u."GOOGLE_ID", e."ID_EMPLEADO"
+         FROM public."USUARIO" u
+         LEFT JOIN public."EMPLEADO" e ON e."ID_PERSONA" = u."ID_PERSONA"
          WHERE "CORREO_ELECTRONICO" = $1`,
         [email.toLowerCase()]
       )
@@ -44,7 +45,8 @@ const authController = {
       if (!isPasswordValid)
         return res.status(401).json({ message: 'Credenciales inválidas' })
 
-      const token = generateToken(user.ID_USUARIO)
+      const role = user.ID_EMPLEADO ? 'admin' : 'user'
+      const token = generateToken(user.ID_USUARIO, role)
 
       res.json({
         message: 'Login exitoso',
@@ -52,7 +54,8 @@ const authController = {
         user: {
           id: user.ID_USUARIO,
           nombre: user.USUARIO,
-          email: user.CORREO_ELECTRONICO
+          email: user.CORREO_ELECTRONICO,
+          role
         }
       })
     } catch (error) {
@@ -142,12 +145,14 @@ const authController = {
       const db = getPool()
 
       const { rows: existing } = await db.query(
-        `SELECT "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO", "GOOGLE_ID"
-         FROM public."USUARIO"
-         WHERE "CORREO_ELECTRONICO" = $1`,
+        `SELECT u."ID_USUARIO", u."USUARIO", u."CORREO_ELECTRONICO", u."GOOGLE_ID", e."ID_EMPLEADO"
+         FROM public."USUARIO" u
+         LEFT JOIN public."EMPLEADO" e ON e."ID_PERSONA" = u."ID_PERSONA"
+         WHERE u."CORREO_ELECTRONICO" = $1`,
         [email.toLowerCase()]
       )
       let user = existing[0]
+      const idEmpleado = user?.ID_EMPLEADO
 
       if (!user) {
         // Crear nuevo usuario desde Google
@@ -172,7 +177,8 @@ const authController = {
         console.log('🔗 Cuenta vinculada a Google:', user.CORREO_ELECTRONICO)
       }
 
-      const token = generateToken(user.ID_USUARIO)
+      const role = idEmpleado ? 'admin' : 'user'
+      const token = generateToken(user.ID_USUARIO, role)
 
       res.json({
         message: 'Login con Google exitoso',
@@ -180,7 +186,8 @@ const authController = {
         user: {
           id: user.ID_USUARIO,
           nombre: user.USUARIO,
-          email: user.CORREO_ELECTRONICO
+          email: user.CORREO_ELECTRONICO,
+          role
         }
       })
     } catch (error) {
