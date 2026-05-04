@@ -21,9 +21,9 @@ router.get('/', authenticateToken, async (req, res, next) => {
         u."USUARIO"                           AS usuario,
         u."ID_PERSONA",
         CASE
-          WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'Empleado'
-          WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'Miembro'
-          WHEN c."ID_CLIENTE"  IS NOT NULL THEN 'Cliente'
+          WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'miembro'
+          WHEN c."ID_CLIENTE"  IS NOT NULL THEN 'cliente'
+          WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'empleado'
           ELSE 'Usuario'
         END                                   AS tipo,
         COALESCE(c."ESTADO_CLIENTE", 'A')     AS estado,
@@ -68,9 +68,9 @@ router.get('/buscar', authenticateToken, async (req, res, next) => {
         COALESCE(p."NOMBRE_COMPLETO", u."USUARIO") AS nombre,
         u."CORREO_ELECTRONICO"                AS correo,
         CASE
-          WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'Empleado'
-          WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'Miembro'
-          WHEN c."ID_CLIENTE"  IS NOT NULL THEN 'Cliente'
+          WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'miembro'
+          WHEN c."ID_CLIENTE"  IS NOT NULL THEN 'cliente'
+          WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'empleado'
           ELSE 'Usuario'
         END                                   AS tipo
       FROM public."USUARIO" u
