@@ -13,6 +13,7 @@ export const authenticateToken = (req, res, next) => {
     req.user = decoded // { id: ..., role: ... }
     next()
   } catch (err) {
+    console.error('❌ Error de autenticación:', err.message)
     return res.status(403).json({ error: 'Token inválido o expirado' })
   }
 }
