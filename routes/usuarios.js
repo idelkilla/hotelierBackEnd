@@ -20,12 +20,17 @@ router.get('/', authenticateToken, async (req, res, next) => {
         u."CORREO_ELECTRONICO"                AS correo,
         u."USUARIO"                           AS usuario,
         u."ID_PERSONA",
+        CONCAT_WS(', ', 
+          CASE WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'Empleado' END,
+          CASE WHEN c."ID_CLIENTE"  IS NOT NULL THEN 'Cliente' END,
+          CASE WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'Miembro' END
+        )                                     AS todos_los_roles,
         CASE
-          WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'miembro'
-          WHEN c."ID_CLIENTE"  IS NOT NULL THEN 'cliente'
-          WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'empleado'
+          WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'Miembro'
+          WHEN c."ID_CLIENTE"  IS NOT NULL THEN 'Cliente'
+          WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'Empleado'
           ELSE 'Usuario'
-        END                                   AS tipo,
+        END                                   AS rol_principal,
         COALESCE(c."ESTADO_CLIENTE", 'A')     AS estado,
         nm."NOMBRE_NIVEL"                     AS nivel_membresia,
         c."FECHA_REGISTRO"                    AS fecha_registro
@@ -38,10 +43,13 @@ router.get('/', authenticateToken, async (req, res, next) => {
       ORDER BY u."ID_USUARIO" DESC
     `)
 
-    // 🔥 FILTRAR EN EL BACKEND (mejor para performance)
+    // Filtrar por tipo en el backend
     let resultado = rows
-    if (tipoFiltro !== 'todos') {
-      resultado = rows.filter(u => u.tipo.toLowerCase() === tipoFiltro)
+    if (tipoFiltro === 'cliente') {
+      // Mostrar TANTO Clientes como Miembros cuando se filtra por Cliente
+      resultado = rows.filter(u => u.rol_principal === 'Cliente' || u.rol_principal === 'Miembro')
+    } else if (tipoFiltro !== 'todos') {
+      resultado = rows.filter(u => u.rol_principal.toLowerCase() === tipoFiltro)
     }
 
     res.json(resultado)
@@ -68,9 +76,9 @@ router.get('/buscar', authenticateToken, async (req, res, next) => {
         COALESCE(p."NOMBRE_COMPLETO", u."USUARIO") AS nombre,
         u."CORREO_ELECTRONICO"                AS correo,
         CASE
-          WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'miembro'
-          WHEN c."ID_CLIENTE"  IS NOT NULL THEN 'cliente'
-          WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'empleado'
+          WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'Miembro'
+          WHEN c."ID_CLIENTE"  IS NOT NULL THEN 'Cliente'
+          WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'Empleado'
           ELSE 'Usuario'
         END                                   AS tipo
       FROM public."USUARIO" u
@@ -86,9 +94,12 @@ router.get('/buscar', authenticateToken, async (req, res, next) => {
       LIMIT 20
     `, [`%${q}%`])
 
-    // Filtrar por tipo si es necesario
+    // Filtrar por tipo
     let resultado = rows
-    if (tipoFiltro !== 'todos') {
+    if (tipoFiltro === 'cliente') {
+      // Mostrar TANTO Clientes como Miembros
+      resultado = rows.filter(u => u.tipo === 'Cliente' || u.tipo === 'Miembro')
+    } else if (tipoFiltro !== 'todos') {
       resultado = rows.filter(u => u.tipo.toLowerCase() === tipoFiltro)
     }
 
