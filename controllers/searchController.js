@@ -33,21 +33,23 @@ export const getUbicaciones = async (req, res) => {
                 c."NOMBRE"       as ciudad,
                 p."NOMBRE"       as pais,
                 u."ID_TIPO"      as id_tipo,
-                COALESCE(tu."NOMBRE", 'Ubicación') as tipo_nombre
+                COALESCE(tu."NOMBRE", 'Ubicación') as tipo_nombre,
+                u."LATITUD",
+                u."LONGITUD"
             FROM public."UBICACION" u
             LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
             LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
             LEFT JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
-            WHERE u."NOMBRE" ILIKE $1 
-               OR c."NOMBRE" ILIKE $1 
-               OR p."NOMBRE" ILIKE $1
+            WHERE (u."NOMBRE" ILIKE $1 
+               OR COALESCE(c."NOMBRE", '') ILIKE $1 
+               OR COALESCE(p."NOMBRE", '') ILIKE $1)
             ORDER BY u."ID_TIPO" DESC, u."NOMBRE" ASC
             LIMIT 20
         `, [searchText])
         
         console.log(`✅ ${rows.length} resultado(s) encontrado(s)`)
         
-        // Log para debug
+        // Debug mejorado
         if (rows.length > 0) {
             console.log('✅ Primeros 3 resultados:')
             rows.slice(0, 3).forEach(r => {
@@ -90,7 +92,9 @@ export const getAeropuertos = async (req, res) => {
             LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
             LEFT JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
             WHERE (u."ID_TIPO" = 1 OR tu."NOMBRE" ILIKE '%aeropuerto%' OR u."NOMBRE" ILIKE '%aeropuerto%')
-              AND (u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
+              AND (u."NOMBRE" ILIKE $1 
+                   OR COALESCE(c."NOMBRE", '') ILIKE $1 
+                   OR COALESCE(p."NOMBRE", '') ILIKE $1)
             ORDER BY u."NOMBRE"
             LIMIT 20
         `, [searchText])

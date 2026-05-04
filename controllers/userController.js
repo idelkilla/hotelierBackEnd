@@ -17,7 +17,7 @@ export const getUsers = async (req, res, next) => {
         nm."NOMBRE_NIVEL" as nivel_membresia
       FROM public."USUARIO" u
       JOIN public."PERSONA" p ON u."ID_PERSONA" = p."ID_PERSONA"
-      LEFT JOIN public."EMPLEADO" e ON p."ID_PERSONA" = e."ID_PERSONA"
+      LEFT JOIN public."EMPLEADO" e ON p."ID_PERSONA" = e."ID_EMPLEADO"
       LEFT JOIN public."CLIENTE" c ON p."ID_PERSONA" = c."ID_CLIENTE"
       LEFT JOIN public."MIEMBRO" m ON p."ID_PERSONA" = m."ID_CLIENTE"
       LEFT JOIN public."NIVEL_MEMBRESIA" nm ON m."ID_NIVEL" = nm."ID_NIVEL"
