@@ -1,6 +1,6 @@
 // routes/filtros.js
 import { Router } from 'express'
-import { query } from '../db.js'   // ← debe decir query, no pool
+import { query } from '../db.js'
 
 const router = Router()
 
