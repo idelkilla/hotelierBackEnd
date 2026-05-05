@@ -403,3 +403,101 @@ export const updateProfile = async (req, res) => {
     res.status(500).json({ error: 'Error al actualizar perfil', detail: error.message })
   }
 }
+import { getPool } from '../db.js'  // ← así, no pool directo
+
+// ══════════════════════════════════════════
+//  MÉTODOS DE PAGO
+// ══════════════════════════════════════════
+
+export const getMetodosPago = async (req, res) => {
+  try {
+    const pool      = getPool()
+    const idPersona = req.user.id_persona  // ajusta si tu JWT usa otro campo
+
+    const { rows } = await pool.query(
+      `SELECT
+         "ID_METODO",
+         "TIPO",
+         "ULTIMOS4",
+         "NOMBRE_TITULAR",
+         "MES_EXP",
+         "ANO_EXP"
+       FROM "METODO_PAGO"
+       WHERE "ID_PERSONA" = $1
+       ORDER BY "CREATED_AT" DESC`,
+      [idPersona]
+    )
+
+    res.json(rows)
+  } catch (error) {
+    console.error('getMetodosPago:', error)
+    res.status(500).json({ error: 'Error al obtener métodos de pago' })
+  }
+}
+
+export const addMetodoPago = async (req, res) => {
+  try {
+    const pool      = getPool()
+    const idPersona = req.user.id_persona
+    const { tipo, numero, nombre_titular, mes_exp, ano_exp } = req.body
+
+    // ── Validaciones ─────────────────────────────────
+    const numLimpio = (numero || '').replace(/\s/g, '')
+    if (numLimpio.length < 13 || numLimpio.length > 19)
+      return res.status(400).json({ error: 'Número de tarjeta inválido' })
+
+    if (!nombre_titular?.trim())
+      return res.status(400).json({ error: 'Nombre del titular requerido' })
+
+    if (!mes_exp?.match(/^\d{2}$/) || !ano_exp?.match(/^\d{2}$/))
+      return res.status(400).json({ error: 'Fecha de expiración inválida' })
+
+    const tiposValidos = ['Visa', 'Mastercard', 'Amex']
+    if (!tiposValidos.includes(tipo))
+      return res.status(400).json({ error: 'Tipo de tarjeta inválido' })
+
+    // ── Solo guardamos los últimos 4 dígitos ─────────
+    const ultimos4 = numLimpio.slice(-4)
+
+    const { rows } = await pool.query(
+      `INSERT INTO "METODO_PAGO"
+         ("ID_PERSONA", "TIPO", "ULTIMOS4", "NOMBRE_TITULAR", "MES_EXP", "ANO_EXP")
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING
+         "ID_METODO", "TIPO", "ULTIMOS4", "NOMBRE_TITULAR", "MES_EXP", "ANO_EXP"`,
+      [idPersona, tipo, ultimos4, nombre_titular.trim(), mes_exp, ano_exp]
+    )
+
+    res.status(201).json(rows[0])
+  } catch (error) {
+    console.error('addMetodoPago:', error)
+    res.status(500).json({ error: 'Error al guardar método de pago' })
+  }
+}
+
+export const deleteMetodoPago = async (req, res) => {
+  try {
+    const pool      = getPool()
+    const idPersona = req.user.id_persona
+    const idMetodo  = parseInt(req.params.id)
+
+    if (isNaN(idMetodo))
+      return res.status(400).json({ error: 'ID inválido' })
+
+    // El WHERE con ambos campos garantiza que un usuario
+    // no pueda borrar tarjetas de otro usuario
+    const { rowCount } = await pool.query(
+      `DELETE FROM "METODO_PAGO"
+       WHERE "ID_METODO" = $1 AND "ID_PERSONA" = $2`,
+      [idMetodo, idPersona]
+    )
+
+    if (rowCount === 0)
+      return res.status(404).json({ error: 'Método de pago no encontrado' })
+
+    res.json({ message: 'Método de pago eliminado correctamente' })
+  } catch (error) {
+    console.error('deleteMetodoPago:', error)
+    res.status(500).json({ error: 'Error al eliminar método de pago' })
+  }
+}
