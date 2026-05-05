@@ -19,9 +19,18 @@ const makeGet = (sql) => async (_req, res, next) => {
 // ════════════════════════════════════════════════════════════════════════════
 // HOSPEDAJE
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/tipos-hospedaje', authenticateToken, makeGet(
-  `SELECT "ID_TIPO", "NOMBRE_TIPO" FROM public."TIPO_HOSPEDAJE" ORDER BY "NOMBRE_TIPO"`
-))
+router.get('/tipos-hospedaje', authenticateToken, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT "ID_TIPO" as id, "NOMBRE_TIPO" as nombre
+      FROM public."TIPO_HOSPEDAJE"
+      ORDER BY "NOMBRE_TIPO" ASC
+    `)
+    res.json(rows)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
 router.post('/tipos-hospedaje', authenticateToken, async (req, res, next) => {
   try {
     const { NOMBRE_TIPO } = req.body

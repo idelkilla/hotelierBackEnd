@@ -109,7 +109,8 @@ export const getAeropuertos = async (req, res) => {
 
 // POST /api/search/hospedaje
 export const postBuscarHospedaje = async (req, res) => {
-    const { destino, habitaciones, fecha_inicio, fecha_fin } = req.body
+    const { destino, habitaciones, fecha_inicio, fecha_fin, id_tipo } = req.body
+    const tipoId = id_tipo ? parseInt(id_tipo, 10) : null
 
     try {
         if (!habitaciones || !Array.isArray(habitaciones) || habitaciones.length === 0) {
@@ -177,12 +178,13 @@ export const postBuscarHospedaje = async (req, res) => {
                 )
                 AND (hab."CAPACIDAD_ADULTO" >= $2 OR hab."CAPACIDAD_ADULTO" IS NULL)
                 AND (hab."CAPACIDAD_NINOS" >= $3 OR hab."CAPACIDAD_NINOS" IS NULL)
+                AND ($4::int IS NULL OR hos."ID_TIPO" = $4)
             GROUP BY 
                 s."ID_SERVICIO", s."NOMBRE", u."NOMBRE", hos."ID_TIPO",
                 c."NOMBRE", p."NOMBRE", th."NOMBRE_TIPO"
             ORDER BY precio_min ASC
             LIMIT 50
-        `, [textoBusqueda, maxAdultos, maxNinos])
+        `, [textoBusqueda, maxAdultos, maxNinos, tipoId])
 
         if (rows.length === 0) {
             console.log('⚠️ Sin resultados')
