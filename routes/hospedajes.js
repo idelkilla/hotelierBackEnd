@@ -161,53 +161,99 @@ router.delete('/:id', async (req, res, next) => {
 
 /**
  * POST /api/hospedajes
- * Crear un hospedaje completo
+ * Crear un hospedaje completo con validaciones mejoradas
  */
 router.post('/', async (req, res, next) => {
   const client = await db.getPool().connect()
   try {
     await client.query('BEGIN')
+
     const data = req.body
 
-    // ✅ VALIDACIONES CORRECTAS
+    // ✅ VALIDACIONES CON MENSAJES ESPECÍFICOS
+    const errors = []
+
+    // Validar nombre
     if (!data.nombre || !data.nombre.trim()) {
-      return res.status(400).json({ error: 'El nombre del hospedaje es requerido' })
-    }
-    if (!data.nombre_legal || !data.nombre_legal.trim()) {
-      return res.status(400).json({ error: 'El nombre legal del proveedor es requerido' })
-    }
-    if (!data.rnc || !data.rnc.trim()) {
-      return res.status(400).json({ error: 'El RNC es requerido' })
-    }
-    if (!data.id_tipo_proveedor) {
-      return res.status(400).json({ error: 'El tipo de proveedor es requerido' })
-    }
-    if (!data.id_tipo_hospedaje) {
-      return res.status(400).json({ error: 'El tipo de hospedaje es requerido' })
-    }
-    if (!data.ubicacion || !data.ubicacion.id_ciudad) {
-      return res.status(400).json({ error: 'Debes seleccionar una ciudad para la ubicación' })
-    }
-    if (!data.ubicacion.latitud || !data.ubicacion.longitud) {
-      return res.status(400).json({ error: 'Latitud y longitud son requeridas' })
+      errors.push('El nombre del hospedaje es requerido')
     }
 
-    // 1️⃣ Crear o obtener PROVEEDOR
+    // Validar nombre legal
+    if (!data.nombre_legal || data.nombre_legal.trim().length < 5) {
+      errors.push('El nombre legal debe tener al menos 5 caracteres')
+    }
+
+    // Validar RNC (debe ser exactamente 12 caracteres)
+    if (!data.rnc || data.rnc.trim().length !== 12) {
+      errors.push('El RNC debe tener exactamente 12 dígitos')
+    }
+
+    // Validar tipo proveedor
+    if (!data.id_tipo_proveedor) {
+      errors.push('El tipo de proveedor es requerido')
+    }
+
+    // Validar tipo hospedaje
+    if (!data.id_tipo_hospedaje) {
+      errors.push('El tipo de hospedaje es requerido')
+    }
+
+    // Validar ubicación
+    if (!data.ubicacion) {
+      errors.push('La ubicación es requerida')
+    } else {
+      if (!data.ubicacion.id_ciudad) {
+        errors.push('Debes seleccionar una ciudad')
+      }
+      if (!data.ubicacion.latitud || !data.ubicacion.longitud) {
+        errors.push('Latitud y longitud son requeridas')
+      }
+      if (isNaN(parseFloat(data.ubicacion.latitud)) || isNaN(parseFloat(data.ubicacion.longitud))) {
+        errors.push('Latitud y longitud deben ser números válidos')
+      }
+    }
+
+    // Si hay errores, devolverlos todos
+    if (errors.length > 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({
+        error: 'Validación fallida',
+        detalles: errors
+      })
+    }
+
+    // 1️⃣ Verificar o crear PROVEEDOR
+    const rncLimpio = data.rnc.trim()
     const { rows: provCheck } = await client.query(
       `SELECT "ID_PROVEEDOR" FROM public."PROVEEDOR" WHERE "RNC" = $1`,
-      [data.rnc.trim()]
+      [rncLimpio]
     )
 
     let idProveedor
     if (provCheck.length) {
       idProveedor = provCheck[0].ID_PROVEEDOR
+      // Actualizar nombre legal si es diferente
+      await client.query(
+        `UPDATE public."PROVEEDOR" SET "NOMBRE_LEGAL" = $1 WHERE "ID_PROVEEDOR" = $2`,
+        [data.nombre_legal.trim(), idProveedor]
+      )
     } else {
-      const { rows: provRows } = await client.query(`
-        INSERT INTO public."PROVEEDOR" ("NOMBRE_LEGAL", "RNC", "ID_TIPO")
-        VALUES ($1, $2, $3)
-        RETURNING "ID_PROVEEDOR"
-      `, [data.nombre_legal.trim(), data.rnc.trim(), data.id_tipo_proveedor])
-      idProveedor = provRows[0].ID_PROVEEDOR
+      try {
+        const { rows: provRows } = await client.query(`
+          INSERT INTO public."PROVEEDOR" ("NOMBRE_LEGAL", "RNC", "ID_TIPO")
+          VALUES ($1, $2, $3)
+          RETURNING "ID_PROVEEDOR"
+        `, [data.nombre_legal.trim(), rncLimpio, data.id_tipo_proveedor])
+        idProveedor = provRows[0].ID_PROVEEDOR
+      } catch (err) {
+        if (err.constraint === 'PROVEEDOR_RNC_unique') {
+          await client.query('ROLLBACK')
+          return res.status(400).json({
+            error: 'El RNC ya está registrado en el sistema'
+          })
+        }
+        throw err
+      }
     }
 
     // 2️⃣ Crear UBICACION
@@ -217,54 +263,72 @@ router.post('/', async (req, res, next) => {
       VALUES ($1, $2, $3, $4, $5, 'A')
       RETURNING "ID_UBICACION"
     `, [
-      data.ubicacion.nombre || data.nombre,
-      data.ubicacion.latitud,
-      data.ubicacion.longitud,
-      data.ubicacion.id_ciudad,
-      2 // ID_TIPO para Hotel
+      (data.ubicacion.nombre || data.nombre).trim(),
+      parseFloat(data.ubicacion.latitud),
+      parseFloat(data.ubicacion.longitud),
+      parseInt(data.ubicacion.id_ciudad),
+      2 // ID_TIPO para Alojamiento
     ])
     const idUbicacion = ubRows[0].ID_UBICACION
 
     // 3️⃣ Crear SERVICIO
     const { rows: srvRows } = await client.query(`
       INSERT INTO public."SERVICIO" 
-      ("NOMBRE", "ID_PROVEEDOR") 
-      VALUES ($1, $2) RETURNING "ID_SERVICIO"
-    `, [data.nombre.trim(), idProveedor])
+      ("NOMBRE", "ID_PROVEEDOR", "ID_TIPO") 
+      VALUES ($1, $2, $3)
+      RETURNING "ID_SERVICIO"
+    `, [data.nombre.trim(), idProveedor, parseInt(data.id_tipo_hospedaje)])
     const idServicio = srvRows[0].ID_SERVICIO
 
     // 4️⃣ Crear HOSPEDAJE
     await client.query(`
       INSERT INTO public."HOSPEDAJE" 
-      ("ID_HOSPEDAJE", "ID_TIPO", "ID_UBICACION", "CHECKIN", "CHECKOUT", 
+      ("ID_HOSPEDAJE", "ID_TIPO", "ID_UBICACION", "CHECKIN", "CHECKOUT",
        "CANCELACION", "MASCOTAS", "FUMAR", "DESCRIPCION")
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `, [
-      idServicio, data.id_tipo_hospedaje, idUbicacion, 
+      idServicio, parseInt(data.id_tipo_hospedaje), idUbicacion, 
       data.checkin || '15:00:00', data.checkout || '11:00:00', 
-      data.cancelacion || 'flexible', data.mascotas || false, 
-      data.fumar || false, data.descripcion || ''
+      data.cancelacion || 'flexible', !!data.mascotas, 
+      !!data.fumar, (data.descripcion || '').trim()
     ])
     
-    // 5️⃣ Insertar amenidades
-    if (data.servicios_incluidos && Array.isArray(data.servicios_incluidos)) {
+    // 5️⃣ Insertar amenidades (ignorar inválidas)
+    if (Array.isArray(data.servicios_incluidos) && data.servicios_incluidos.length > 0) {
       for (const idServ of data.servicios_incluidos) {
         try {
           await client.query(`
             INSERT INTO public."HOSPEDAJE_SERVICIO" ("ID_HOSPEDAJE", "ID_SERVICIO_INCLUIDO")
             VALUES ($1, $2)
-          `, [idServicio, idServ])
+            ON CONFLICT DO NOTHING
+          `, [idServicio, parseInt(idServ)])
         } catch (err) {
-          console.warn('Amenidad duplicada o inválida:', idServ)
+          console.warn('⚠️ Amenidad inválida:', idServ, err.message)
         }
       }
     }
 
     await client.query('COMMIT')
-    res.status(201).json({ ID_HOSPEDAJE: idServicio, message: 'Hospedaje creado con éxito', id: idServicio })
+
+    res.status(201).json({
+      ID_HOSPEDAJE: idServicio,
+      id: idServicio,
+      message: 'Hospedaje creado con éxito'
+    })
   } catch (err) {
-    await client.query('ROLLBACK')
-    next(err)
+    try {
+      await client.query('ROLLBACK')
+    } catch (rbErr) {
+      console.error('Error en ROLLBACK:', rbErr.message)
+    }
+
+    console.error('❌ Error en POST hospedajes:', err.message, err.constraint)
+
+    // Devolver error específico
+    res.status(500).json({
+      error: 'Error al crear hospedaje',
+      detalles: err.message
+    })
   } finally {
     client.release()
   }
