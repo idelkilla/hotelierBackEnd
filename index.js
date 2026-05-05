@@ -14,6 +14,7 @@ import catalogosRouter from './routes/catalogos.js'
 import usuariosRouter from './routes/usuarios.js'
 import hospedajeDetalleRoutes from './routes/hospedajeDetalle.js'
 import reservasRouter from './routes/reservas.js'
+import imagenesRouter from './routes/imagenes.js'
 import habitacionesRoutes from './routes/habitaciones.js'
 import filtrosRouter from './routes/filtros.js'
 import metodoPagoRouter from './routes/metodoPago.js'
@@ -74,7 +75,20 @@ app.use('/api/usuarios', usuariosRouter) // ✅ CORRECTO - Solo una ruta
 app.use('/api/dashboard', dashboardRouter)
 app.use('/api/habitaciones', habitacionesRoutes)
 app.use('/api/filtros', filtrosRouter)
+<<<<<<< HEAD
 app.use('/api/metodos-pago', metodoPagoRouter)
+=======
+app.use('/api/imagenes', imagenesRouter)
+
+// Compatibilidad con el antiguo path: /api/hospedajes/:id/imagenes
+app.use('/api/hospedajes/:id/imagenes', (req, res, next) => {
+  if (req.method === 'POST') {
+    req.body.id_hospedaje = req.params.id
+    return imagenesRouter(req, res, next)
+  }
+  next()
+})
+>>>>>>> 0514042797edcab91978efb56f63b06e9d9ee188
 
 // Borrador de hospedajes
 const borradores = new Map()
