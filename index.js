@@ -16,7 +16,6 @@ import hospedajeDetalleRoutes from './routes/hospedajeDetalle.js'
 import reservasRouter from './routes/reservas.js'
 import habitacionesRoutes from './routes/habitaciones.js'
 import filtrosRouter from './routes/filtros.js'
-import vuelosRouter from './routes/vuelos.js'
 import errorHandler from './middleware/errorHandler.js'
 
 const app = express()
