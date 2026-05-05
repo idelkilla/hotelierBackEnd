@@ -123,7 +123,7 @@ router.get('/', async (req, res) => {
     const ids = aerolineas.split(',').map(Number).filter(Boolean);
     if (ids.length) {
       params.push(ids);
-      conditions.push(`p."ID_PROVEEDOR" = ANY($${params.length})`);
+      conditions.push(`p."ID_PROVEEDOR" = ANY($${params.length}::int[])`);
     }
   }
 
@@ -162,13 +162,11 @@ router.get('/', async (req, res) => {
       FROM  "VUELO"        v
       JOIN  "VUELO_CLASE"  vc   ON vc."ID_VUELO"    = v."ID_VUELO"
       JOIN  "CLASE_CABINA" cc   ON cc."ID_CLASE"     = vc."ID_CLASE"
-      JOIN  "RESERVA_VUELO" rv  ON rv."ID_VUELO"     = v."ID_VUELO"
-      JOIN  "RESERVA"      r    ON r."ID_RESERVA"    = rv."ID_RESERVA"
-      JOIN  "SERVICIO"     s    ON s."ID_SERVICIO"   = rv."ID_VUELO"  -- ajusta si el join difiere
+      JOIN  "SERVICIO"     s    ON s."ID_SERVICIO"   = v."ID_VUELO"
       JOIN  "PROVEEDOR"    p    ON p."ID_PROVEEDOR"  = s."ID_PROVEEDOR"
-      JOIN  "UBICACION"    u_orig ON u_orig."ID_UBICACION" = v."ID_ORIGEN"
+      LEFT JOIN "UBICACION" u_orig ON u_orig."ID_UBICACION" = v."ID_ORIGEN"
       LEFT JOIN "UBICACION" u_dest ON u_dest."ID_UBICACION" = v."ID_DESTINO"
-      WHERE ${conditions.join(' AND ')}
+      WHERE ${conditions.length > 0 ? conditions.join(' AND ') : '1=1'}
       ${escalasCondition}
       ORDER BY vc."PRECIO" ASC
       LIMIT 100
