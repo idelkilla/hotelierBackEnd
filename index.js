@@ -75,9 +75,7 @@ app.use('/api/usuarios', usuariosRouter) // ✅ CORRECTO - Solo una ruta
 app.use('/api/dashboard', dashboardRouter)
 app.use('/api/habitaciones', habitacionesRoutes)
 app.use('/api/filtros', filtrosRouter)
-<<<<<<< HEAD
 app.use('/api/metodos-pago', metodoPagoRouter)
-=======
 app.use('/api/imagenes', imagenesRouter)
 
 // Compatibilidad con el antiguo path: /api/hospedajes/:id/imagenes
@@ -88,7 +86,6 @@ app.use('/api/hospedajes/:id/imagenes', (req, res, next) => {
   }
   next()
 })
->>>>>>> 0514042797edcab91978efb56f63b06e9d9ee188
 
 // Borrador de hospedajes
 const borradores = new Map()
