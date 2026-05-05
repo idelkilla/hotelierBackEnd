@@ -105,13 +105,13 @@ router.post('/', upload.single('imagen'), async (req, res, next) => {
     const urlRelativa = `/uploads/imagenes/${req.file.filename}`
     const { rows: [img] } = await db.query(`
       INSERT INTO public."IMAGEN_HOSPEDAJE" 
-      ("ID_HOSPEDAJE", "URL", "ORDEN", "ALT_TEXT", "ESTADO")
+      ("ID_HOSPEDAJE", "URL", "ORDEN", "ALT_TEXT")
       VALUES ($1, $2, $3, $4)
-      RETURNING "ID_IMAGEN"
+      RETURNING "ID_IMAGEN", "URL", "ORDEN", "ALT_TEXT"
     `, [
-      id_hospedaje,
+      parseInt(id_hospedaje),
       urlRelativa,
-      orden || 0,
+      parseInt(orden) || 0,
       alt_text || ''
     ])
 
