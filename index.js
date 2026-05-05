@@ -67,7 +67,6 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 app.use('/api/auth', authRoutes)
 app.use('/api/search', searchRoutes)
 app.use('/api/user', userRoutes)
-app.use('/api/hospedajes', hospedajesRouter)
 app.use('/api/catalogos', catalogosRouter)
 app.use('/api/hospedaje', hospedajeDetalleRoutes)
 app.use('/api/reservas', reservasRouter)
@@ -76,18 +75,21 @@ app.use('/api/dashboard', dashboardRouter)
 app.use('/api/habitaciones', habitacionesRoutes)
 app.use('/api/filtros', filtrosRouter)
 app.use('/api/metodos-pago', metodoPagoRouter)
+
+// ✅ CORRECTO - imagenes PRIMERO, hospedajes DESPUÉS
 app.use('/api/imagenes', imagenesRouter)
 
-// Compatibilidad con el antiguo path: /api/hospedajes/:id/imagenes
+// Compatibilidad /api/hospedajes/:id/imagenes — ANTES de hospedajesRouter
 app.use('/api/hospedajes/:id/imagenes', (req, res, next) => {
   if (req.method === 'POST') {
-    // No tocar req.body - multer lo necesita intacto
-    // Pasamos el id por query para que imagenes.js lo lea si es necesario
     req.query.id_hospedaje = req.params.id
     return imagenesRouter(req, res, next)
   }
   next()
 })
+
+// Hospedajes VA DESPUÉS
+app.use('/api/hospedajes', hospedajesRouter)
 
 // Borrador de hospedajes
 const borradores = new Map()
