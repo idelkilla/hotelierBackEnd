@@ -493,7 +493,9 @@ router.delete(
 router.get(
   '/paises',
   makeGet(
-    `SELECT p.*, c."NOMBRE" AS CONTINENTE FROM public."PAIS" p
+    `SELECT p."ID_PAIS", p."NOMBRE", p."ISO_CODE", p."MONEDA_LOCAL", 
+            p."CODIGO_TELEFONO", c."NOMBRE" AS "CONTINENTE"
+     FROM public."PAIS" p
    JOIN public."CONTINENTE" c ON c."ID_CONTINENTE" = p."ID_CONTINENTE"
    ORDER BY p."NOMBRE"`,
   ),
@@ -518,7 +520,8 @@ router.get('/ciudades', async (req, res, next) => {
 router.get(
   '/proveedores',
   makeGet(
-    `SELECT p.*, t."NOMBRE_TIPO" AS TIPO FROM public."PROVEEDOR" p
+    `SELECT p."ID_PROVEEDOR", p."NOMBRE_LEGAL", p."RNC", t."NOMBRE_TIPO" AS "TIPO"
+     FROM public."PROVEEDOR" p
    JOIN public."TIPO_PROVEEDOR" t ON t."ID_TIPO" = p."ID_TIPO"
    ORDER BY p."NOMBRE_LEGAL"`,
   ),
