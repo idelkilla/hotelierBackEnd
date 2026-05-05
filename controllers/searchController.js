@@ -1,82 +1,152 @@
 import { getPool } from '../db.js'
 
+const validateSearchQuery = (q) => {
+    if (!q || typeof q !== 'string' || q.trim() === '') return ''
+    return q.trim()
+}
+
+const validateId = (id) => {
+    const parsed = parseInt(id, 10)
+    if (isNaN(parsed) || parsed <= 0) return null
+    return parsed
+}
+
 // GET /api/search/ubicaciones?q=texto
 export const getUbicaciones = async (req, res) => {
     const { q } = req.query
+    const query = validateSearchQuery(q)
+
     try {
         const pool = getPool()
+        
+        let searchText = '%'
+        if (query) {
+            searchText = `%${query}%`
+        }
+        
+        console.log(`🔍 Buscando ubicaciones: "${query || 'todas'}"`)
+
         const { rows } = await pool.query(`
             SELECT
-                u."ID_UBICACION" AS id,
-                u."NOMBRE"       AS ubicacion,
-                u."ID_TIPO"      AS id_tipo,
-                c."NOMBRE"       AS ciudad,
-                p."NOMBRE"       AS pais
-            FROM "UBICACION" u
-            JOIN "CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
-            JOIN "PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
-            WHERE ($1 = '' OR u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
-            ORDER BY u."NOMBRE"
-        `, [q ? `%${q}%` : ''])
+                u."ID_UBICACION" as id,
+                u."NOMBRE"       as ubicacion,
+                c."NOMBRE"       as ciudad,
+                p."NOMBRE"       as pais,
+                u."ID_TIPO"      as id_tipo,
+                COALESCE(tu."NOMBRE", 'Ubicación') as tipo_nombre,
+                u."LATITUD",
+                u."LONGITUD"
+            FROM public."UBICACION" u
+            LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
+            LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
+            LEFT JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
+            WHERE (u."NOMBRE" ILIKE $1 
+               OR COALESCE(c."NOMBRE", '') ILIKE $1 
+               OR COALESCE(p."NOMBRE", '') ILIKE $1)
+            ORDER BY u."ID_TIPO" DESC, u."NOMBRE" ASC
+            LIMIT 20
+        `, [searchText])
+        
+        console.log(`✅ ${rows.length} resultado(s) encontrado(s)`)
+        
+        // Debug mejorado
+        if (rows.length > 0) {
+            console.log('✅ Primeros 3 resultados:')
+            rows.slice(0, 3).forEach(r => {
+                console.log(`  - ${r.ubicacion} (Tipo: ${r.tipo_nombre})`)
+            })
+        }
+        
         res.json(rows)
     } catch (err) {
-        console.error('getUbicaciones:', err.message)
-        res.status(500).json([])
+        console.error('❌ Error CRÍTICO en getUbicaciones:', err)
+        res.status(500).json({ error: err.message, stack: err.stack })
     }
 }
 
 // GET /api/search/aeropuertos?q=texto
 export const getAeropuertos = async (req, res) => {
     const { q } = req.query
+    const query = validateSearchQuery(q)
+
     try {
         const pool = getPool()
+        
+        let searchText = '%'
+        if (query) {
+            searchText = `%${query}%`
+        }
+        
+        console.log(`🔍 Buscando aeropuertos: "${query || 'todos'}"`)
+        
         const { rows } = await pool.query(`
             SELECT
-                u."ID_UBICACION" AS id,
-                u."NOMBRE"       AS ubicacion,
-                u."ID_TIPO"      AS id_tipo,
-                c."NOMBRE"       AS ciudad,
-                p."NOMBRE"       AS pais
-            FROM "UBICACION" u
-            JOIN "CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
-            JOIN "PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
-            WHERE u."ID_TIPO" = 3
-              AND ($1 = '' OR u."NOMBRE" ILIKE $1 OR c."NOMBRE" ILIKE $1 OR p."NOMBRE" ILIKE $1)
+                u."ID_UBICACION" as id,
+                u."NOMBRE"       as ubicacion,
+                c."NOMBRE"       as ciudad,
+                p."NOMBRE"       as pais,
+                u."ID_TIPO"      as id_tipo,
+                COALESCE(tu."NOMBRE", 'Aeropuerto') as tipo_nombre
+            FROM public."UBICACION" u
+            LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
+            LEFT JOIN public."PAIS"   p ON c."ID_PAIS"   = p."ID_PAIS"
+            LEFT JOIN public."TIPO_UBICACION" tu ON u."ID_TIPO" = tu."ID_TIPO"
+            WHERE (u."ID_TIPO" = 1 OR tu."NOMBRE" ILIKE '%aeropuerto%' OR u."NOMBRE" ILIKE '%aeropuerto%')
+              AND (u."NOMBRE" ILIKE $1 
+                   OR COALESCE(c."NOMBRE", '') ILIKE $1 
+                   OR COALESCE(p."NOMBRE", '') ILIKE $1)
             ORDER BY u."NOMBRE"
-            LIMIT 10
-        `, [q ? `%${q}%` : ''])
+            LIMIT 20
+        `, [searchText])
+        
+        console.log(`✅ ${rows.length} resultado(s) encontrado(s)`)
         res.json(rows)
     } catch (err) {
-        console.error('getAeropuertos:', err.message)
-        res.status(500).json([])
+        console.error('❌ Error CRÍTICO en getAeropuertos:', err)
+        res.status(500).json({ error: err.message, stack: err.stack })
     }
 }
 
+// POST /api/search/hospedaje
 export const postBuscarHospedaje = async (req, res) => {
-    const { destino, habitaciones, fecha_inicio, fecha_fin } = req.body
+    const { destino, habitaciones, fecha_inicio, fecha_fin, id_tipo } = req.body
+    const tipoId = id_tipo ? parseInt(id_tipo, 10) : null
 
     try {
-        const pool = getPool()
-
-        if (!habitaciones || !Array.isArray(habitaciones)) {
-            return res.status(400).json({ error: 'Parámetro habitaciones requerido' })
+        if (!habitaciones || !Array.isArray(habitaciones) || habitaciones.length === 0) {
+            return res.status(400).json({ error: 'Parámetro habitaciones requerido y no vacío' })
         }
 
-        // Evitar error de -Infinity si el array está vacío
-        const maxAdultos = habitaciones.length > 0 ? Math.max(...habitaciones.map(h => parseInt(h.adultos) || 0)) : 0
-        const maxNinos   = habitaciones.length > 0 ? Math.max(...habitaciones.map(h => parseInt(h.ninos)   || 0)) : 0
+        if (fecha_inicio && fecha_fin) {
+            const fechaInicio = new Date(fecha_inicio)
+            const fechaFin = new Date(fecha_fin)
 
-        // Limpieza del destino: toma la primera parte antes de la coma y limpia espacios
-        const rawDestino = (destino || '').toString();
-        const primeraParte = rawDestino.split(',')[0].trim();
-        const textoBusqueda = primeraParte ? `%${primeraParte}%` : '%';
+            if (isNaN(fechaInicio.getTime()) || isNaN(fechaFin.getTime())) {
+                return res.status(400).json({ error: 'Formato de fecha inválido' })
+            }
 
-        console.log('=== BÚSQUEDA ===')
-        console.log('destino recibido:', destino)
-        console.log('textoBusqueda:', textoBusqueda)
-        console.log('maxAdultos:', maxAdultos, '| maxNinos:', maxNinos)
+            if (fechaFin <= fechaInicio) {
+                return res.status(400).json({ error: 'La fecha fin debe ser posterior a la fecha inicio' })
+            }
+        }
 
-        // ── 1. Query principal ──────────────────────────────────────────────
+        const pool = getPool()
+
+        if (!habitaciones.every(h => h.adultos !== undefined && h.ninos !== undefined)) {
+            return res.status(400).json({ error: 'Cada habitación debe tener adultos y niños' })
+        }
+
+        const maxAdultos = Math.max(...habitaciones.map(h => parseInt(h.adultos) || 0))
+        const maxNinos = Math.max(...habitaciones.map(h => parseInt(h.ninos) || 0))
+
+        const rawDestino = (destino || '').toString().trim()
+        const primeraParte = rawDestino.split(',')[0].trim()
+        const textoBusqueda = primeraParte ? `%${primeraParte}%` : '%'
+
+        console.log('=== BÚSQUEDA DE HOSPEDAJE ===')
+        console.log('Destino:', destino)
+        console.log('Adultos:', maxAdultos, '| Niños:', maxNinos)
+
         const { rows } = await pool.query(`
             SELECT
                 s."ID_SERVICIO"                          AS id_servicio,
@@ -84,111 +154,117 @@ export const postBuscarHospedaje = async (req, res) => {
                 u."NOMBRE"                               AS ubicacion_nombre,
                 c."NOMBRE"                               AS ciudad,
                 p."NOMBRE"                               AS pais,
+                hos."ID_TIPO"                            AS id_tipo_hospedaje,
                 th."NOMBRE_TIPO"                         AS tipo_hospedaje,
                 MIN(hab."PRECIO_NOCHE")                  AS precio_min,
                 ROUND(AVG(r."CALIFICACION")::NUMERIC, 1) AS calificacion_promedio,
                 COUNT(DISTINCT r."ID_RESENA")            AS total_resenas,
                 COUNT(DISTINCT hab."ID_HABITACION")      AS habitaciones_disponibles
-            FROM      "SERVICIO"       s
-            JOIN      "HOSPEDAJE"      hos ON hos."ID_HOSPEDAJE" = s."ID_SERVICIO"
-            JOIN      "TIPO_HOSPEDAJE" th  ON th."ID_TIPO"       = hos."ID_TIPO"
-            JOIN      "UBICACION"      u   ON u."ID_UBICACION"   = hos."ID_UBICACION"
-            JOIN      "CIUDAD"         c   ON c."ID_CIUDAD"      = u."ID_CIUDAD"
-            JOIN      "PAIS"           p   ON p."ID_PAIS"        = c."ID_PAIS"
-            JOIN      "HABITACION"     hab ON hab."ID_HOSPEDAJE" = hos."ID_HOSPEDAJE"
-            LEFT JOIN "RESENA"         r   ON r."ID_SERVICIO"    = s."ID_SERVICIO"
-            WHERE
+            FROM public."SERVICIO" s
+            INNER JOIN public."HOSPEDAJE" hos ON hos."ID_HOSPEDAJE" = s."ID_SERVICIO"
+            INNER JOIN public."TIPO_HOSPEDAJE" th ON th."ID_TIPO" = hos."ID_TIPO"
+            INNER JOIN public."UBICACION" u ON u."ID_UBICACION" = hos."ID_UBICACION"
+            LEFT JOIN public."CIUDAD" c ON u."ID_CIUDAD" = c."ID_CIUDAD"
+            LEFT JOIN public."PAIS" p ON c."ID_PAIS" = p."ID_PAIS"
+            LEFT JOIN public."HABITACION" hab ON hab."ID_HOSPEDAJE" = hos."ID_HOSPEDAJE"
+            LEFT JOIN public."RESENA" r ON r."ID_SERVICIO" = s."ID_SERVICIO"
+            WHERE 
                 (
-                    $1 = '%'
-                    OR c."NOMBRE"  ILIKE $1
-                    OR u."NOMBRE"  ILIKE $1
-                    OR p."NOMBRE"  ILIKE $1
+                    $1 = '%' 
+                    OR s."NOMBRE" ILIKE $1 
+                    OR u."NOMBRE" ILIKE $1 
+                    OR c."NOMBRE" ILIKE $1 
+                    OR p."NOMBRE" ILIKE $1
                 )
-                AND hab."CAPACIDAD_ADULTO" >= $2
-                AND hab."CAPACIDAD_NINOS"  >= $3
-            GROUP BY
-                s."ID_SERVICIO", s."NOMBRE",
-                u."NOMBRE", c."NOMBRE", p."NOMBRE",
-                th."NOMBRE_TIPO"
+                AND (hab."CAPACIDAD_ADULTO" >= $2 OR hab."CAPACIDAD_ADULTO" IS NULL)
+                AND (hab."CAPACIDAD_NINOS" >= $3 OR hab."CAPACIDAD_NINOS" IS NULL)
+                AND ($4::int IS NULL OR hos."ID_TIPO" = $4)
+            GROUP BY 
+                s."ID_SERVICIO", s."NOMBRE", u."NOMBRE", hos."ID_TIPO",
+                c."NOMBRE", p."NOMBRE", th."NOMBRE_TIPO"
             ORDER BY precio_min ASC
-        `, [textoBusqueda, maxAdultos, maxNinos])
+            LIMIT 50
+        `, [textoBusqueda, maxAdultos, maxNinos, tipoId])
 
-        console.log('Hospedajes encontrados:', rows.length)
         if (rows.length === 0) {
-            console.log('⚠️ Sin resultados — verificar datos en BD')
+            console.log('⚠️ Sin resultados')
             return res.json([])
         }
 
-        const ids = rows.map(r => r.id_servicio)
-        console.log('IDs encontrados:', ids)
+        console.log(`✅ ${rows.length} hospedaje(s) encontrado(s)`)
 
-        // ── 2. Amenidades (tabla HOSPEDAJE_SERVICIO) ────────────────────────
+        const ids = rows.map(r => r.id_servicio)
+
         let amenidadesMap = {}
         try {
             const { rows: srvRows } = await pool.query(`
                 SELECT hs."ID_HOSPEDAJE" AS id_hospedaje, si."NOMBRE" AS nombre
-                FROM "HOSPEDAJE_SERVICIO" hs
-                JOIN "SERVICIO_INCLUIDO"  si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
+                FROM public."HOSPEDAJE_SERVICIO" hs
+                JOIN public."SERVICIO_INCLUIDO" si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
                 WHERE hs."ID_HOSPEDAJE" = ANY($1)
             `, [ids])
+            
             srvRows.forEach(({ id_hospedaje, nombre }) => {
                 if (!amenidadesMap[id_hospedaje]) amenidadesMap[id_hospedaje] = []
                 amenidadesMap[id_hospedaje].push(nombre)
             })
-            console.log('Amenidades OK:', srvRows.length, 'registros')
         } catch (e) {
-            console.error('⚠️ Error en amenidades (no crítico):', e.message)
+            console.error('⚠️ Error en amenidades:', e.message)
         }
 
-        // ── 3. Imágenes (tabla IMAGEN_HOSPEDAJE — puede no existir aún) ─────
         let imagenesMap = {}
         try {
             const { rows: imgRows } = await pool.query(`
                 SELECT "ID_HOSPEDAJE" AS id_hospedaje, "URL" AS url
-                FROM "IMAGEN_HOSPEDAJE"
+                FROM public."IMAGEN_HOSPEDAJE"
                 WHERE "ID_HOSPEDAJE" = ANY($1)
                 ORDER BY "ID_HOSPEDAJE", "ORDEN" ASC
             `, [ids])
+            
             imgRows.forEach(({ id_hospedaje, url }) => {
                 if (!imagenesMap[id_hospedaje]) imagenesMap[id_hospedaje] = []
                 imagenesMap[id_hospedaje].push(url)
             })
-            console.log('Imágenes OK:', imgRows.length, 'registros')
         } catch (e) {
-            console.error('⚠️ Error en imágenes (tabla puede no existir):', e.message)
-            // No es crítico — los hoteles se muestran sin foto
+            console.error('⚠️ Error en imágenes:', e.message)
         }
 
-        // ── 4. Respuesta ────────────────────────────────────────────────────
         const resultado = rows.map(r => ({
-            id_servicio:              r.id_servicio,
-            hotel:                    r.hotel,
-            ubicacion:                `${r.ubicacion_nombre}, ${r.ciudad}, ${r.pais}`,
-            tipo_hospedaje:           r.tipo_hospedaje,
-            precio_min:               parseFloat(r.precio_min) || 0,
-            calificacion_promedio:    r.calificacion_promedio
-                                        ? parseFloat(r.calificacion_promedio)
-                                        : null,
-            total_resenas:            parseInt(r.total_resenas) || 0,
+            id_servicio: r.id_servicio,
+            hotel: r.hotel,
+            ubicacion: [r.ubicacion_nombre, r.ciudad, r.pais]
+                .filter(Boolean)
+                .join(', ') || 'Ubicación no disponible',
+            tipo_hospedaje: r.tipo_hospedaje,
+            id_tipo_hospedaje: r.id_tipo_hospedaje,
+            precio_min: parseFloat(r.precio_min) || 0,
+            calificacion_promedio: r.calificacion_promedio 
+                ? parseFloat(r.calificacion_promedio) 
+                : null,
+            total_resenas: parseInt(r.total_resenas) || 0,
             habitaciones_disponibles: parseInt(r.habitaciones_disponibles) || 0,
-            amenidades:               amenidadesMap[r.id_servicio] || [],
-            imagen_portada:           imagenesMap[r.id_servicio]?.[0] || null,
-            imagenes:                 imagenesMap[r.id_servicio]   || [],
+            amenidades: amenidadesMap[r.id_servicio] || [],
+            imagen_portada: imagenesMap[r.id_servicio]?.[0] || null,
+            imagenes: imagenesMap[r.id_servicio] || [],
         }))
 
-        console.log('Enviando', resultado.length, 'hospedajes al frontend')
         res.json(resultado)
 
     } catch (err) {
-        console.error('SEARCH_ERROR CRÍTICO:', err.message)
-        console.error(err.stack)
-        res.status(500).json({ error: err.message })
+        console.error('SEARCH_ERROR:', err.message)
+        res.status(500).json({ error: 'Error en la búsqueda' })
     }
 }
 
 // GET /api/search/hospedaje/:id
 export const getDetalleHospedaje = async (req, res) => {
     const { id } = req.params
+    const hospedajeId = validateId(id)
+
+    if (!hospedajeId) {
+        return res.status(400).json({ error: 'ID inválido' })
+    }
+
     try {
         const pool = getPool()
 
@@ -207,17 +283,19 @@ export const getDetalleHospedaje = async (req, res) => {
                 hos."MASCOTAS",
                 hos."FUMAR",
                 hos."DESCRIPCION"
-            FROM "SERVICIO"       s
-            JOIN "HOSPEDAJE"      hos ON hos."ID_HOSPEDAJE"  = s."ID_SERVICIO"
-            JOIN "TIPO_HOSPEDAJE" th  ON th."ID_TIPO"        = hos."ID_TIPO"
-            JOIN "UBICACION"      u   ON u."ID_UBICACION"    = hos."ID_UBICACION"
-            JOIN "CIUDAD"         c   ON c."ID_CIUDAD"       = u."ID_CIUDAD"
-            JOIN "PAIS"           p   ON p."ID_PAIS"         = c."ID_PAIS"
-            JOIN "PROVEEDOR"      pr  ON pr."ID_PROVEEDOR"   = s."ID_PROVEEDOR"
+            FROM public."SERVICIO" s
+            JOIN public."HOSPEDAJE" hos ON hos."ID_HOSPEDAJE" = s."ID_SERVICIO"
+            JOIN public."TIPO_HOSPEDAJE" th ON th."ID_TIPO" = hos."ID_TIPO"
+            JOIN public."UBICACION" u ON u."ID_UBICACION" = hos."ID_UBICACION"
+            JOIN public."CIUDAD" c ON c."ID_CIUDAD" = u."ID_CIUDAD"
+            JOIN public."PAIS" p ON p."ID_PAIS" = c."ID_PAIS"
+            JOIN public."PROVEEDOR" pr ON pr."ID_PROVEEDOR" = s."ID_PROVEEDOR"
             WHERE s."ID_SERVICIO" = $1
-        `, [id])
+        `, [hospedajeId])
 
-        if (!rows.length) return res.status(404).json({ error: 'No encontrado' })
+        if (!rows.length) {
+            return res.status(404).json({ error: 'Hospedaje no encontrado' })
+        }
 
         const { rows: habitaciones } = await pool.query(`
             SELECT
@@ -226,35 +304,48 @@ export const getDetalleHospedaje = async (req, res) => {
                 hab."CAPACIDAD_ADULTO" AS capacidad_adulto,
                 hab."CAPACIDAD_NINOS"  AS capacidad_ninos,
                 hab."PRECIO_NOCHE"     AS precio_noche
-            FROM "HABITACION"      hab
-            JOIN "TIPO_HABITACION" tph ON tph."ID_TIPO_HABITACION" = hab."ID_TIPO_HABITACION"
+            FROM public."HABITACION" hab
+            JOIN public."TIPO_HABITACION" tph ON tph."ID_TIPO_HABITACION" = hab."ID_TIPO_HABITACION"
             WHERE hab."ID_HOSPEDAJE" = $1
             ORDER BY hab."PRECIO_NOCHE" ASC
-        `, [id])
+        `, [hospedajeId])
 
         const { rows: imagenes } = await pool.query(`
             SELECT "URL", "ORDEN", "ALT_TEXT"
-            FROM "IMAGEN_HOSPEDAJE"
+            FROM public."IMAGEN_HOSPEDAJE"
             WHERE "ID_HOSPEDAJE" = $1
             ORDER BY "ORDEN" ASC
-        `, [id])
+        `, [hospedajeId])
 
         const { rows: amenidades } = await pool.query(`
             SELECT si."NOMBRE"
-            FROM "HOSPEDAJE_SERVICIO" hs
-            JOIN "SERVICIO_INCLUIDO" si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
+            FROM public."HOSPEDAJE_SERVICIO" hs
+            JOIN public."SERVICIO_INCLUIDO" si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
             WHERE hs."ID_HOSPEDAJE" = $1
-        `, [id])
+        `, [hospedajeId])
 
-        res.json({ 
-            ...rows[0], 
-            habitaciones, 
-            imagenes, 
-            amenidades: amenidades.map(a => a.NOMBRE) 
+        const det = rows[0]
+        res.json({
+            id_servicio: det.id_servicio,
+            hotel: det.hotel,
+            ciudad: det.ciudad,
+            pais: det.pais,
+            ubicacion_nombre: det.ubicacion_nombre,
+            tipo_hospedaje: det.tipo_hospedaje,
+            proveedor: det.proveedor,
+            checkin: det.CHECKIN,
+            checkout: det.CHECKOUT,
+            cancelacion: det.CANCELACION,
+            mascotas: !!det.MASCOTAS,
+            fumar: !!det.FUMAR,
+            descripcion: det.DESCRIPCION,
+            habitaciones,
+            imagenes,
+            amenidades: amenidades.map(a => a.NOMBRE),
         })
 
     } catch (err) {
-        console.error('getDetalleHospedaje:', err.message)
-        res.status(500).json({ error: err.message })
+        console.error('getDetalleHospedaje ERROR:', err.message)
+        res.status(500).json({ error: 'Error al obtener detalles' })
     }
 }
