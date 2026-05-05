@@ -1,9 +1,14 @@
 // routes/filtros.js
 import { Router } from 'express'
-import { pool } from '../db.js'   // ajusta el export según tu db.js
+import { query } from '../db.js'
 
 const router = Router()
 
+/**
+ * GET /api/filtros/vuelos
+ * Devuelve los datos que necesita FiltrosSidebar.vue
+ * Query params opcionales: id_origen, id_destino
+ */
 router.get('/vuelos', async (req, res) => {
   const { id_origen, id_destino } = req.query
 
@@ -22,7 +27,7 @@ router.get('/vuelos', async (req, res) => {
       aerolineasWhere += ` AND v."ID_DESTINO" = $${aerolineasParams.length}`
     }
 
-    const { rows: aerolineas } = await pool.query(`
+    const { rows: aerolineas } = await query(`
       SELECT
         p."ID_PROVEEDOR"                         AS id,
         p."NOMBRE_LEGAL"                         AS nombre,
@@ -38,7 +43,7 @@ router.get('/vuelos', async (req, res) => {
     `, aerolineasParams)
 
     // ── Clases de cabina desde CLASE_CABINA ─────────────────────────────────
-    const { rows: clases } = await pool.query(`
+    const { rows: clases } = await query(`
       SELECT "ID_CLASE" AS id, "NOMBRE" AS label
       FROM "CLASE_CABINA"
       ORDER BY "ID_CLASE"
@@ -50,7 +55,7 @@ router.get('/vuelos', async (req, res) => {
     if (id_origen) { durParams.push(id_origen); durWhere += ` AND "ID_ORIGEN" = $${durParams.length}` }
     if (id_destino) { durParams.push(id_destino); durWhere += ` AND "ID_DESTINO" = $${durParams.length}` }
 
-    const { rows: dur } = await pool.query(`
+    const { rows: dur } = await query(`
       SELECT
         CEIL(MIN("DURACION_MINUTOS") / 60.0)::int AS min_horas,
         CEIL(MAX("DURACION_MINUTOS") / 60.0)::int AS max_horas
@@ -59,7 +64,7 @@ router.get('/vuelos', async (req, res) => {
     `, durParams)
 
     // ── Conteo de escalas desde RESERVA_VUELO ───────────────────────────────
-    const { rows: esc } = await pool.query(`
+    const { rows: esc } = await query(`
       SELECT
         SUM(CASE WHEN max_orden = 1 THEN 1 ELSE 0 END)  AS directo,
         SUM(CASE WHEN max_orden = 2 THEN 1 ELSE 0 END)  AS una_escala,
