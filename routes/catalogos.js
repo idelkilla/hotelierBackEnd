@@ -576,5 +576,27 @@ router.get(
     `SELECT "ID_TIPO", "NOMBRE" FROM public."TIPO_CORREO_ELECTRONICO" ORDER BY "NOMBRE"`,
   ),
 )
+// ════════════════════════════════════════════════════════════════════════════
+// AGREGAR ESTE BLOQUE AL FINAL DE routes/catalogos.js, ANTES DE: export default router
+// ════════════════════════════════════════════════════════════════════════════
 
+// GET /api/catalogos/ubicaciones/:idCiudad
+router.get('/ubicaciones/:idCiudad', async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT
+         u."ID_UBICACION" AS id,
+         u."NOMBRE"       AS nombre,
+         tu."NOMBRE"      AS tipo
+       FROM public."UBICACION" u
+       LEFT JOIN public."TIPO_UBICACION" tu ON tu."ID_TIPO" = u."ID_TIPO"
+       WHERE u."ID_CIUDAD" = $1 AND u."ESTADO" = 'A'
+       ORDER BY u."NOMBRE" ASC`,
+      [req.params.idCiudad]
+    )
+    res.json(rows)
+  } catch (err) {
+    next(err)
+  }
+})
 export default router

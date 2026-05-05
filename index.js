@@ -7,7 +7,7 @@ import { connectDB } from './db.js'
 
 import authRoutes from './routes/authRoutes.js'
 import searchRoutes from './routes/searchRoutes.js'
-import userRoutes from './routes/userRoutes.js'
+import perfilRoutes from './routes/perfilRoutes.js'
 import hospedajesRouter from './routes/hospedajes.js'
 import dashboardRouter from './routes/dashboard.js'
 import catalogosRouter from './routes/catalogos.js'
@@ -66,7 +66,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 // 5. QUINTO: Rutas de la API — ✅ CORRECT — all under /api/*
 app.use('/api/auth', authRoutes)
 app.use('/api/search', searchRoutes)
-app.use('/api/user', userRoutes)
+app.use('/api/perfil', perfilRoutes)
 app.use('/api/catalogos', catalogosRouter)
 app.use('/api/hospedaje', hospedajeDetalleRoutes)
 app.use('/api/reservas', reservasRouter)
