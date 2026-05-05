@@ -217,7 +217,7 @@ router.post('/', async (req, res, next) => {
     if (errors.length > 0) {
       await client.query('ROLLBACK')
       return res.status(400).json({
-        error: 'Validación fallida',
+        message: 'Validación fallida',
         detalles: errors
       })
     }
@@ -326,8 +326,8 @@ router.post('/', async (req, res, next) => {
 
     // Devolver error específico
     res.status(500).json({
-      error: 'Error al crear hospedaje',
-      detalles: err.message
+      message: 'Error al crear hospedaje',
+      detalles: [err.message]
     })
   } finally {
     client.release()

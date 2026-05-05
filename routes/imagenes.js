@@ -93,7 +93,7 @@ router.post('/', upload.single('imagen'), async (req, res, next) => {
     // Verificar que el hospedaje existe
     const { rows: hospCheck } = await db.query(
       `SELECT "ID_HOSPEDAJE" FROM public."HOSPEDAJE" WHERE "ID_HOSPEDAJE" = $1`,
-      [id_hospedaje]
+      [parseInt(id_hospedaje)]
     )
 
     if (!hospCheck.length) {
@@ -107,9 +107,9 @@ router.post('/', upload.single('imagen'), async (req, res, next) => {
       INSERT INTO public."IMAGEN_HOSPEDAJE" 
       ("ID_HOSPEDAJE", "URL", "ORDEN", "ALT_TEXT")
       VALUES ($1, $2, $3, $4)
-      RETURNING *
+      RETURNING "ID_IMAGEN"
     `, [
-      id_hospedaje,
+      parseInt(id_hospedaje),
       urlRelativa,
       orden || 0,
       alt_text || ''

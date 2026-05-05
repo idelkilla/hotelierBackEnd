@@ -20,7 +20,7 @@ const errorHandler = (err, req, res, _next) => {
   }
 
   // Error genérico
-  res.status(500).json({ message: 'Error interno del servidor.' })
+  res.status(500).json({ message: err.message || 'Error interno del servidor.' })
 }
 
 export default errorHandler;
