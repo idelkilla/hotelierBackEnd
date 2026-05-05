@@ -54,7 +54,7 @@ const corsOptions = {
 
 // 3. TERCERO: Aplicar CORS globalmente
 app.use(cors(corsOptions))
-app.options('*', cors()) // Habilitar preflight para todas las rutas
+app.options('{path}', cors());
 
 // 4. CUARTO: Parsers y Rutas Estáticas
 app.use(express.json())
