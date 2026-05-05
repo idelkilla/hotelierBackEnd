@@ -33,7 +33,7 @@ const validateRequired = (fields, obj) => {
 router.get('/tipos-hospedaje', authenticateToken, async (req, res, next) => {
   try {
     const { rows } = await db.query(`
-      SELECT "ID_TIPO" as id, "NOMBRE_TIPO" as nombre
+      SELECT "ID_TIPO", "NOMBRE_TIPO"
       FROM public."TIPO_HOSPEDAJE"
       ORDER BY "NOMBRE_TIPO" ASC
     `)
@@ -113,7 +113,7 @@ router.get(
   '/tipos-habitacion',
   authenticateToken,
   makeGet(
-    `SELECT "ID_TIPO_HABITACION" as id, "NOMBRE" as nombre FROM public."TIPO_HABITACION" ORDER BY "NOMBRE"`,
+    `SELECT "ID_TIPO_HABITACION", "NOMBRE" FROM public."TIPO_HABITACION" ORDER BY "NOMBRE"`,
   ),
 )
 
@@ -186,7 +186,7 @@ router.get(
   '/servicios-incluidos',
   authenticateToken,
   makeGet(
-    `SELECT "ID_SERVICIO_INCLUIDO" as id, "NOMBRE" as nombre FROM public."SERVICIO_INCLUIDO" ORDER BY "NOMBRE"`,
+    `SELECT "ID_SERVICIO_INCLUIDO", "NOMBRE" FROM public."SERVICIO_INCLUIDO" ORDER BY "NOMBRE"`,
   ),
 )
 
@@ -263,7 +263,7 @@ router.get(
   '/estados-reserva',
   authenticateToken,
   makeGet(
-    `SELECT "ID_ESTADO" as id, "ESTADO" as estado FROM public."ESTADO_RESERVA" ORDER BY "ESTADO"`,
+    `SELECT "ID_ESTADO", "ESTADO" FROM public."ESTADO_RESERVA" ORDER BY "ESTADO"`,
   ),
 )
 
@@ -341,8 +341,7 @@ router.get(
   '/niveles-membresia',
   authenticateToken,
   makeGet(
-    `SELECT "ID_NIVEL" as id, "NOMBRE_NIVEL" as nombre, "PUNTOS_MINIMOS" as puntos_minimos, "DESCRIPCION" as descripcion
-   FROM public."NIVEL_MEMBRESIA" ORDER BY "PUNTOS_MINIMOS"`,
+    `SELECT "ID_NIVEL", "NOMBRE_NIVEL", "PUNTOS_MINIMOS", "DESCRIPCION" FROM public."NIVEL_MEMBRESIA" ORDER BY "PUNTOS_MINIMOS"`,
   ),
 )
 
@@ -422,7 +421,7 @@ router.get(
   '/tipos-ubicacion',
   authenticateToken,
   makeGet(
-    `SELECT "ID_TIPO" as id, "NOMBRE" as nombre FROM public."TIPO_UBICACION" ORDER BY "NOMBRE"`,
+    `SELECT "ID_TIPO", "NOMBRE" FROM public."TIPO_UBICACION" ORDER BY "NOMBRE"`,
   ),
 )
 
@@ -494,10 +493,7 @@ router.delete(
 router.get(
   '/paises',
   makeGet(
-    `SELECT p."ID_PAIS" as id, p."NOMBRE" as nombre, p."ISO_CODE" as iso_code, 
-          p."MONEDA_LOCAL" as moneda, p."CODIGO_TELEFONO" as codigo_tel, 
-          c."NOMBRE" AS continente
-   FROM public."PAIS" p
+    `SELECT p.*, c."NOMBRE" AS CONTINENTE FROM public."PAIS" p
    JOIN public."CONTINENTE" c ON c."ID_CONTINENTE" = p."ID_CONTINENTE"
    ORDER BY p."NOMBRE"`,
   ),
@@ -509,7 +505,7 @@ router.get('/ciudades', async (req, res, next) => {
 
   try {
     const { rows } = await db.query(
-      `SELECT "ID_CIUDAD" as id, "NOMBRE" as nombre FROM public."CIUDAD" 
+      `SELECT "ID_CIUDAD", "NOMBRE" FROM public."CIUDAD" 
        WHERE "ID_PAIS" = $1 ORDER BY "NOMBRE"`,
       [idPais],
     )
@@ -522,9 +518,7 @@ router.get('/ciudades', async (req, res, next) => {
 router.get(
   '/proveedores',
   makeGet(
-    `SELECT p."ID_PROVEEDOR" as id, p."NOMBRE_LEGAL" as nombre, p."RNC" as rnc, 
-          t."NOMBRE_TIPO" AS tipo
-   FROM public."PROVEEDOR" p
+    `SELECT p.*, t."NOMBRE_TIPO" AS TIPO FROM public."PROVEEDOR" p
    JOIN public."TIPO_PROVEEDOR" t ON t."ID_TIPO" = p."ID_TIPO"
    ORDER BY p."NOMBRE_LEGAL"`,
   ),
@@ -533,7 +527,7 @@ router.get(
 router.get(
   '/tipos-proveedor',
   makeGet(
-    `SELECT "ID_TIPO" as id, "NOMBRE_TIPO" as nombre FROM public."TIPO_PROVEEDOR" ORDER BY "NOMBRE_TIPO"`,
+    `SELECT "ID_TIPO", "NOMBRE_TIPO" FROM public."TIPO_PROVEEDOR" ORDER BY "NOMBRE_TIPO"`,
   ),
 )
 
@@ -541,42 +535,42 @@ router.get(
   '/puestos',
   authenticateToken,
   makeGet(
-    `SELECT "ID_PUESTO" as id, "NOMBRE_PUESTO" as nombre, "SUELDO_BASE" as sueldo FROM public."PUESTO" ORDER BY "NOMBRE_PUESTO"`,
+    `SELECT "ID_PUESTO", "NOMBRE_PUESTO", "SUELDO_BASE" FROM public."PUESTO" ORDER BY "NOMBRE_PUESTO"`,
   ),
 )
 
 router.get(
   '/idiomas',
   makeGet(
-    `SELECT "ID_IDIOMA" as id, "NOMBRE_IDIOMA" as nombre FROM public."IDIOMA" ORDER BY "NOMBRE_IDIOMA"`,
+    `SELECT "ID_IDIOMA", "NOMBRE_IDIOMA" FROM public."IDIOMA" ORDER BY "NOMBRE_IDIOMA"`,
   ),
 )
 
 router.get(
   '/estados-civiles',
   makeGet(
-    `SELECT "ID_ESTADO_CIVIL" as id, "NOMBRE_ESTADO" as nombre FROM public."ESTADO_CIVIL" ORDER BY "NOMBRE_ESTADO"`,
+    `SELECT "ID_ESTADO_CIVIL", "NOMBRE_ESTADO" FROM public."ESTADO_CIVIL" ORDER BY "NOMBRE_ESTADO"`,
   ),
 )
 
 router.get(
   '/tipos-documentacion',
   makeGet(
-    `SELECT "ID_TIPO" as id, "TIPO" as tipo FROM public."TIPO_DOCUMENTACION" ORDER BY "TIPO"`,
+    `SELECT "ID_TIPO", "TIPO" FROM public."TIPO_DOCUMENTACION" ORDER BY "TIPO"`,
   ),
 )
 
 router.get(
   '/tipos-telefono',
   makeGet(
-    `SELECT "ID_TIPO" as id, "NOMBRE" as nombre FROM public."TIPO_TELEFONO" ORDER BY "NOMBRE"`,
+    `SELECT "ID_TIPO", "NOMBRE" FROM public."TIPO_TELEFONO" ORDER BY "NOMBRE"`,
   ),
 )
 
 router.get(
   '/tipos-correo',
   makeGet(
-    `SELECT "ID_TIPO" as id, "NOMBRE" as nombre FROM public."TIPO_CORREO_ELECTRONICO" ORDER BY "NOMBRE"`,
+    `SELECT "ID_TIPO", "NOMBRE" FROM public."TIPO_CORREO_ELECTRONICO" ORDER BY "NOMBRE"`,
   ),
 )
 
