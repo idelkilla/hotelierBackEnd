@@ -138,31 +138,45 @@ router.get('/:id/disponibilidad', async (req, res) => {
 router.get('/:id/resenas', async (req, res) => {
   const pool = getPool()
   const { id } = req.params
+  console.log('📌 Solicitando reseñas para hospedaje ID:', id)
   try {
     const { rows } = await pool.query(`
       SELECT
-        r."ID_RESENA" AS id,
-        p."NOMBRE_COMPLETO" AS name,
-        SUBSTRING(p."NOMBRE_COMPLETO", 1, 1) || SUBSTRING(p."APELLIDOS", 1, 1) AS initials,
-        '#2563a8' AS "avatarColor",
-        pa."NOMBRE" AS country,
-        TO_CHAR(r."FECHA", 'Month YYYY') AS date,
-        r."CALIFICACION" AS rating,
-        r."COMENTARIO" AS text,
-        0 AS likes,
-        false AS expanded
+        r."ID_RESENA"                                    AS id,
+        COALESCE(p."NOMBRE_COMPLETO", 'Anónimo')        AS nombre,
+        COALESCE(p."APELLIDOS", '')                      AS apellidos,
+        SUBSTRING(
+          COALESCE(p."NOMBRE_COMPLETO", 'A'),
+          1, 1
+        ) || 
+        SUBSTRING(
+          COALESCE(p."APELLIDOS", '?'),
+          1, 1
+        )                                                AS initials,
+        COALESCE(pa."NOMBRE", 'Desconocido')             AS pais,
+        TO_CHAR(r."FECHA_CREACION", 'Month YYYY')        AS fecha,
+        ROUND(r."CALIFICACION"::NUMERIC)::INTEGER        AS calificacion,
+        r."COMENTARIO"                                   AS texto,
+        0                                                AS likes,
+        false                                            AS expanded
       FROM "RESENA" r
-      JOIN "CLIENTE" c ON c."ID_CLIENTE" = r."ID_CLIENTE"
-      JOIN "PERSONA" p ON p."ID_PERSONA" = c."ID_CLIENTE"
-      LEFT JOIN "UBICACION" u ON u."ID_UBICACION" = p."ID_UBICACION"
-      LEFT JOIN "CIUDAD" ci ON ci."ID_CIUDAD" = u."ID_CIUDAD"
-      LEFT JOIN "PAIS" pa ON pa."ID_PAIS" = ci."ID_PAIS"
+      LEFT JOIN "CLIENTE" c          ON c."ID_CLIENTE" = r."ID_CLIENTE"
+      LEFT JOIN "PERSONA" p          ON p."ID_PERSONA" = c."ID_CLIENTE"
+      LEFT JOIN "UBICACION" u          ON u."ID_UBICACION" = p."ID_UBICACION"
+      LEFT JOIN "CIUDAD" ci          ON ci."ID_CIUDAD" = u."ID_CIUDAD"
+      LEFT JOIN "PAIS" pa          ON pa."ID_PAIS" = ci."ID_PAIS"
       WHERE r."ID_SERVICIO" = $1
-      ORDER BY r."FECHA" DESC
+      ORDER BY r."FECHA_CREACION" DESC
     `, [id])
+    console.log('✅ Reseñas encontradas:', rows.length)
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    console.error('❌ ERROR en /hospedaje/:id/resenas:', e.message)
+    console.error('Stack trace:', e.stack)
+    res.status(500).json({ 
+      error: 'Error al cargar reseñas',
+      details: e.message 
+    })
   }
 })
 
