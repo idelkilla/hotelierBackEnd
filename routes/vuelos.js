@@ -103,6 +103,7 @@ router.get('/', async (req, res) => {
     escalas,        // "0" | "1" | "2+"
     tiempo_max,     // horas
     fecha_salida,
+    nombre,         // Búsqueda por texto
   } = req.query;
 
   const params = [];
@@ -110,7 +111,7 @@ router.get('/', async (req, res) => {
 
   if (id_origen)  { params.push(id_origen);  conditions.push(`v."ID_ORIGEN"  = $${params.length}`); }
   if (id_destino) { params.push(id_destino); conditions.push(`v."ID_DESTINO" = $${params.length}`); }
-  if (clase)      { params.push(clase);       conditions.push(`rv."ID_CLASE"  = $${params.length}`); }
+  if (clase)      { params.push(clase);       conditions.push(`vc."ID_CLASE"  = $${params.length}`); }
   if (tiempo_max) {
     params.push(Number(tiempo_max) * 60);
     conditions.push(`v."DURACION_MINUTOS" <= $${params.length}`);
@@ -125,6 +126,10 @@ router.get('/', async (req, res) => {
       params.push(ids);
       conditions.push(`p."ID_PROVEEDOR" = ANY($${params.length}::int[])`);
     }
+  }
+  if (nombre) {
+    params.push(`%${nombre}%`);
+    conditions.push(`(p."NOMBRE_LEGAL" ILIKE $${params.length} OR v."NUMERO_VUELO" ILIKE $${params.length})`);
   }
 
   // Filtro de escalas: subquery sobre RESERVA_VUELO
