@@ -82,7 +82,8 @@ router.post('/', upload.single('imagen'), async (req, res, next) => {
       return res.status(400).json({ error: 'No se subió ninguna imagen' })
     }
 
-    const { id_hospedaje, orden, alt_text } = req.body
+    const { orden, alt_text } = req.body
+    const id_hospedaje = req.body.id_hospedaje || req.query.id_hospedaje
 
     if (!id_hospedaje) {
       // Limpiar archivo si no hay hospedaje

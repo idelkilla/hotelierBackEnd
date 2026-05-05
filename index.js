@@ -81,8 +81,9 @@ app.use('/api/imagenes', imagenesRouter)
 // Compatibilidad con el antiguo path: /api/hospedajes/:id/imagenes
 app.use('/api/hospedajes/:id/imagenes', (req, res, next) => {
   if (req.method === 'POST') {
-    req.body = req.body || {}
-    req.body.id_hospedaje = req.params.id
+    // No tocar req.body - multer lo necesita intacto
+    // Pasamos el id por query para que imagenes.js lo lea si es necesario
+    req.query.id_hospedaje = req.params.id
     return imagenesRouter(req, res, next)
   }
   next()
