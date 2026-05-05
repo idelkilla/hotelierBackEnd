@@ -31,6 +31,9 @@ export const authenticateToken = (req, res, next) => {
   }
 }
 
+// Alias para compatibilidad con archivos que importan { authMiddleware }
+export const authMiddleware = authenticateToken
+
 export const authenticateAdmin = (req, res, next) => {
   authenticateToken(req, res, () => {
     if (req.user?.role !== 'admin') {  // ✅ opcional chaining por seguridad
