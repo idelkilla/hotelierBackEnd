@@ -500,7 +500,9 @@ router.get(
    ORDER BY p."NOMBRE"`,
   ),
 )
-
+router.get('/ocupaciones', makeGet(
+  `SELECT "ID_OCUPACION", "NOMBRE" FROM public."OCUPACION" ORDER BY "NOMBRE"`
+))
 router.get('/ciudades', async (req, res, next) => {
   const idPais = req.query.id_pais
   if (!idPais) return res.status(400).json({ error: 'id_pais requerido' })
