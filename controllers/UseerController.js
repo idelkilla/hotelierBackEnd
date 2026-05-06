@@ -1,13 +1,10 @@
 import * as db from '../db.js'
 
-// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/perfil/profile
-// ─────────────────────────────────────────────────────────────────────────────
 export async function getProfile(req, res, next) {
   try {
     const idUsuario = req.user.id
 
-    // 1. Obtener ID_PERSONA desde USUARIO
     const { rows: usuarioRows } = await db.query(
       `SELECT "ID_PERSONA", "CORREO_ELECTRONICO"
        FROM public."USUARIO"
@@ -19,7 +16,6 @@ export async function getProfile(req, res, next) {
     const idPersona = usuarioRows[0].ID_PERSONA
     const email     = usuarioRows[0].CORREO_ELECTRONICO
 
-    // 2. PERSONA + UBICACION → CIUDAD → PAIS
     const { rows: personaRows } = await db.query(
       `SELECT
          p."ID_PERSONA",
@@ -45,7 +41,6 @@ export async function getProfile(req, res, next) {
     )
     const persona = personaRows[0] ?? {}
 
-    // 3. TELEFONO activo (LIMIT 1)
     const { rows: telRows } = await db.query(
       `SELECT "NUMERO_TELEFONICO"
        FROM public."TELEFONO"
@@ -55,7 +50,6 @@ export async function getProfile(req, res, next) {
     )
     const telefonoNumero = telRows[0]?.NUMERO_TELEFONICO ?? ''
 
-    // 4. CLIENTE
     const { rows: clienteRows } = await db.query(
       `SELECT "GENERO", "FECHA_NACIMIENTO", "DESCRIPCION_PERSONAL"
        FROM public."CLIENTE"
@@ -64,7 +58,6 @@ export async function getProfile(req, res, next) {
     )
     const cliente = clienteRows[0] ?? {}
 
-    // 5. MIEMBRO + NIVEL_MEMBRESIA
     const { rows: miembroRows } = await db.query(
       `SELECT m."NUMERO_MIEMBRO", m."PUNTOS_FIDELIDAD", n."NOMBRE_NIVEL"
        FROM public."MIEMBRO" m
@@ -74,7 +67,6 @@ export async function getProfile(req, res, next) {
     )
     const miembro = miembroRows[0] ?? {}
 
-    // 6. DATOS_BIOGRAFICOS + joins
     const { rows: bioRows } = await db.query(
       `SELECT
          db."SANGRE",
@@ -84,15 +76,14 @@ export async function getProfile(req, res, next) {
          n."NOMBRE_NACIONALIDAD"  AS "NACIONALIDAD",
          ec."NOMBRE_ESTADO"       AS "ESTADO_CIVIL"
        FROM public."DATOS_BIOGRAFICOS" db
-       LEFT JOIN public."OCUPACION"    o  ON o."ID_OCUPACION"   = db."ID_OCUPACION"
-       LEFT JOIN public."NACIONALIDAD" n  ON n."ID_NACIONALIDAD"= db."ID_NACIONALIDAD"
+       LEFT JOIN public."OCUPACION"    o  ON o."ID_OCUPACION"    = db."ID_OCUPACION"
+       LEFT JOIN public."NACIONALIDAD" n  ON n."ID_NACIONALIDAD" = db."ID_NACIONALIDAD"
        LEFT JOIN public."ESTADO_CIVIL" ec ON ec."ID_ESTADO_CIVIL"= db."ID_ESTADO_CIVIL"
        WHERE db."ID_PERSONA" = $1`,
       [idPersona]
     )
     const bio = bioRows[0] ?? {}
 
-    // 7. DOCUMENTACION
     const { rows: docRows } = await db.query(
       `SELECT
          "NUMERO_DOCUMENTACION",
@@ -105,7 +96,6 @@ export async function getProfile(req, res, next) {
     )
     const doc = docRows[0] ?? {}
 
-    // ── Respuesta ─────────────────────────────────────────────────────────────
     return res.json({
       id_persona:                   idPersona,
       nombre_completo:              persona.NOMBRE_COMPLETO              ?? '',
@@ -149,9 +139,7 @@ export async function getProfile(req, res, next) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/perfil/profile/update
-// ─────────────────────────────────────────────────────────────────────────────
 export async function updateProfile(req, res, next) {
   const client = await db.connect()
   try {
@@ -159,7 +147,6 @@ export async function updateProfile(req, res, next) {
 
     const idUsuario = req.user.id
 
-    // Obtener ID_PERSONA
     const { rows: uRows } = await client.query(
       `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`,
       [idUsuario]
@@ -182,12 +169,15 @@ export async function updateProfile(req, res, next) {
       numero_documento, fecha_emision, fecha_expiracion, emisor
     } = req.body
 
-    // ── 1. PERSONA ────────────────────────────────────────────────────────────
-    const personaFields = { nombre_completo, apellidos, segundo_nombre, num_viajero_conocido, num_dhs_trip, contacto_emergencia_nombre, contacto_emergencia_tel }
-    const hasPersona    = Object.values(personaFields).some(v => v !== undefined) || id_ubicacion !== undefined
+    // 1. PERSONA — upsert
+    const personaFields = {
+      nombre_completo, apellidos, segundo_nombre,
+      num_viajero_conocido, num_dhs_trip,
+      contacto_emergencia_nombre, contacto_emergencia_tel
+    }
+    const hasPersona = Object.values(personaFields).some(v => v !== undefined) || id_ubicacion !== undefined
 
     if (hasPersona) {
-      // Verificar id_ubicacion si viene
       if (id_ubicacion !== undefined && id_ubicacion !== null) {
         const { rows: ubRows } = await client.query(
           `SELECT "ID_UBICACION" FROM public."UBICACION" WHERE "ID_UBICACION" = $1`,
@@ -200,16 +190,20 @@ export async function updateProfile(req, res, next) {
       }
 
       await client.query(
-        `UPDATE public."PERSONA" SET
-           "NOMBRE_COMPLETO"            = COALESCE($1,  "NOMBRE_COMPLETO"),
-           "APELLIDOS"                  = COALESCE($2,  "APELLIDOS"),
-           "SEGUNDO_NOMBRE"             = COALESCE($3,  "SEGUNDO_NOMBRE"),
-           "NUM_VIAJERO_CONOCIDO"       = COALESCE($4,  "NUM_VIAJERO_CONOCIDO"),
-           "NUM_DHS_TRIP"               = COALESCE($5,  "NUM_DHS_TRIP"),
-           "CONTACTO_EMERGENCIA_NOMBRE" = COALESCE($6,  "CONTACTO_EMERGENCIA_NOMBRE"),
-           "CONTACTO_EMERGENCIA_TEL"    = COALESCE($7,  "CONTACTO_EMERGENCIA_TEL"),
-           "ID_UBICACION"               = COALESCE($8,  "ID_UBICACION")
-         WHERE "ID_PERSONA" = $9`,
+        `INSERT INTO public."PERSONA"
+           ("ID_PERSONA", "NOMBRE_COMPLETO", "APELLIDOS", "SEGUNDO_NOMBRE",
+            "NUM_VIAJERO_CONOCIDO", "NUM_DHS_TRIP",
+            "CONTACTO_EMERGENCIA_NOMBRE", "CONTACTO_EMERGENCIA_TEL", "ID_UBICACION")
+         VALUES ($9, $1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT ("ID_PERSONA") DO UPDATE SET
+           "NOMBRE_COMPLETO"            = COALESCE(EXCLUDED."NOMBRE_COMPLETO",            "PERSONA"."NOMBRE_COMPLETO"),
+           "APELLIDOS"                  = COALESCE(EXCLUDED."APELLIDOS",                  "PERSONA"."APELLIDOS"),
+           "SEGUNDO_NOMBRE"             = COALESCE(EXCLUDED."SEGUNDO_NOMBRE",             "PERSONA"."SEGUNDO_NOMBRE"),
+           "NUM_VIAJERO_CONOCIDO"       = COALESCE(EXCLUDED."NUM_VIAJERO_CONOCIDO",       "PERSONA"."NUM_VIAJERO_CONOCIDO"),
+           "NUM_DHS_TRIP"               = COALESCE(EXCLUDED."NUM_DHS_TRIP",               "PERSONA"."NUM_DHS_TRIP"),
+           "CONTACTO_EMERGENCIA_NOMBRE" = COALESCE(EXCLUDED."CONTACTO_EMERGENCIA_NOMBRE", "PERSONA"."CONTACTO_EMERGENCIA_NOMBRE"),
+           "CONTACTO_EMERGENCIA_TEL"    = COALESCE(EXCLUDED."CONTACTO_EMERGENCIA_TEL",    "PERSONA"."CONTACTO_EMERGENCIA_TEL"),
+           "ID_UBICACION"               = COALESCE(EXCLUDED."ID_UBICACION",               "PERSONA"."ID_UBICACION")`,
         [
           nombre_completo            ?? null,
           apellidos                  ?? null,
@@ -224,7 +218,7 @@ export async function updateProfile(req, res, next) {
       )
     }
 
-    // ── 2. USUARIO (email) ────────────────────────────────────────────────────
+    // 2. USUARIO — email
     if (email !== undefined) {
       await client.query(
         `UPDATE public."USUARIO"
@@ -234,7 +228,7 @@ export async function updateProfile(req, res, next) {
       )
     }
 
-    // ── 3. TELEFONO ───────────────────────────────────────────────────────────
+    // 3. TELEFONO — upsert
     if (telefono_numero !== undefined) {
       const { rows: telRows } = await client.query(
         `SELECT "ID_TELEFONO" FROM public."TELEFONO"
@@ -259,7 +253,7 @@ export async function updateProfile(req, res, next) {
       }
     }
 
-    // ── 4. CLIENTE ────────────────────────────────────────────────────────────
+    // 4. CLIENTE — genero, fecha_nacimiento, descripcion_personal
     const hasCliente = [genero, fecha_nacimiento, descripcion_personal].some(v => v !== undefined)
     if (hasCliente) {
       const { rows: cliRows } = await client.query(
@@ -274,8 +268,8 @@ export async function updateProfile(req, res, next) {
              "DESCRIPCION_PERSONAL" = COALESCE($3, "DESCRIPCION_PERSONAL")
            WHERE "ID_CLIENTE" = $4`,
           [
-            genero             ?? null,
-            fecha_nacimiento   ?? null,
+            genero               ?? null,
+            fecha_nacimiento     ?? null,
             descripcion_personal ?? null,
             idPersona
           ]
@@ -283,7 +277,7 @@ export async function updateProfile(req, res, next) {
       }
     }
 
-    // ── 5. DATOS_BIOGRAFICOS ──────────────────────────────────────────────────
+    // 5. DATOS_BIOGRAFICOS
     const hasBio = [sangre, estatura, peso].some(v => v !== undefined)
     if (hasBio) {
       const { rows: bioRows } = await client.query(
@@ -302,7 +296,7 @@ export async function updateProfile(req, res, next) {
       }
     }
 
-    // ── 6. DOCUMENTACION (upsert) ─────────────────────────────────────────────
+    // 6. DOCUMENTACION — upsert
     const hasDoc = [numero_documento, fecha_emision, fecha_expiracion, emisor].some(v => v !== undefined)
     if (hasDoc) {
       const { rows: docRows } = await client.query(
@@ -318,10 +312,10 @@ export async function updateProfile(req, res, next) {
              "EMISOR"               = COALESCE($4, "EMISOR")
            WHERE "ID_PERSONA" = $5`,
           [
-            numero_documento  ?? null,
-            fecha_emision     ?? null,
-            fecha_expiracion  ?? null,
-            emisor            ?? null,
+            numero_documento ?? null,
+            fecha_emision    ?? null,
+            fecha_expiracion ?? null,
+            emisor           ?? null,
             idPersona
           ]
         )
