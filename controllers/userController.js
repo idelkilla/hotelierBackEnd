@@ -254,7 +254,11 @@ export const updateProfile = async (req, res) => {
     for (const [key, col] of Object.entries(bioCols)) {
       if (data[key] !== undefined) {
         bioFields.push(`${col} = $${idx++}`)
-        bioValues.push(data[key] || null)
+        // ✅ Convierte estatura y peso a string máx 5 chars (char(5))
+        const val = (key === 'estatura' || key === 'peso')
+          ? String(data[key]).slice(0, 5)
+          : (data[key] || null)
+        bioValues.push(val)
       }
     }
 
@@ -305,7 +309,39 @@ export const updateProfile = async (req, res) => {
           bioValues
         )
       } else {
-        console.warn('DATOS_BIOGRAFICOS no existe para ID_PERSONA', idPersona)
+        // ✅ No existe → INSERT con valores mínimos requeridos
+        const { rows: ocRows } = await pool.query(
+          `SELECT "ID_OCUPACION" FROM public."OCUPACION" LIMIT 1`
+        )
+        const { rows: naRows } = await pool.query(
+          `SELECT "ID_NACIONALIDAD" FROM public."NACIONALIDAD" LIMIT 1`
+        )
+        const { rows: ecRows } = await pool.query(
+          `SELECT "ID_ESTADO_CIVIL" FROM public."ESTADO_CIVIL" LIMIT 1`
+        )
+        const { rows: luRows } = await pool.query(
+          `SELECT "ID_LUGAR_NACIMIENTO" FROM public."LUGAR_NACIMIENTO" LIMIT 1`
+        )
+
+        await pool.query(
+          `INSERT INTO public."DATOS_BIOGRAFICOS"
+             ("ID_PERSONA", "FECHA_NACIMIENTO", "TIPO_SEXO", "SANGRE",
+              "ESTATURA", "PESO", "ID_OCUPACION", "ID_LUGAR_NACIMIENTO",
+              "ID_NACIONALIDAD", "ID_ESTADO_CIVIL")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            idPersona,
+            data.fecha_nacimiento || null,
+            data.genero           || 'No especificado',
+            data.sangre           || 'N/A',
+            data.estatura ? String(data.estatura).slice(0, 5) : '000',
+            data.peso     ? String(data.peso).slice(0, 5)     : '000',
+            data.id_ocupacion     ?? ocRows[0]?.ID_OCUPACION     ?? 1,
+            luRows[0]?.ID_LUGAR_NACIMIENTO ?? 1,
+            data.id_nacionalidad  ?? naRows[0]?.ID_NACIONALIDAD  ?? 1,
+            data.id_estado_civil  ?? ecRows[0]?.ID_ESTADO_CIVIL  ?? 1,
+          ]
+        )
       }
     }
 
