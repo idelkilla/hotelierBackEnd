@@ -207,22 +207,23 @@ router.post('/:id/resenas', authenticateToken, async (req, res) => {
   if (!comentario?.trim())
     return res.status(400).json({ error: 'El comentario es requerido' })
 
-  // El ID del usuario viene del token JWT (authMiddleware lo adjunta a req.user.id)
+  // El ID del usuario viene del token JWT (ID_USUARIO)
   const userId = req.user?.id
-  if (!userId)
-    return res.status(401).json({ error: 'No autenticado' })
+  if (!userId) return res.status(401).json({ error: 'No autenticado' })
 
   try {
-    // 1. Obtener el ID_PERSONA vinculado al ID_USUARIO del token
+    // 1. Buscar el ID_PERSONA vinculado al ID_USUARIO y verificar que sea CLIENTE
     const { rows: userRows } = await pool.query(
-      `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`,
+      `SELECT u."ID_PERSONA" 
+       FROM public."USUARIO" u
+       JOIN public."CLIENTE" c ON c."ID_CLIENTE" = u."ID_PERSONA"
+       WHERE u."ID_USUARIO" = $1`,
       [userId]
     )
-    
-    if (!userRows.length || !userRows[0].ID_PERSONA) {
-      return res.status(403).json({ error: 'Usuario no tiene un perfil de persona asociado' })
-    }
-    
+
+    if (!userRows.length)
+      return res.status(403).json({ error: 'No tienes perfil de cliente' })
+
     const idPersona = userRows[0].ID_PERSONA
 
     // ID manual seguro (hasta que agregues GENERATED IDENTITY a la tabla)
