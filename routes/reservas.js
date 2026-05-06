@@ -170,23 +170,29 @@ router.post('/checkout', authenticateToken, async (req, res) => {
     const idDestino = idUbicacion
 
     // ── 7. Insertar RESERVA principal ───────────────────────
-    const { rows: reservaRows } = await client.query(
+    const { rows: maxReservaRows } = await client.query(
+      `SELECT COALESCE(MAX("ID_RESERVA"), 0) + 1 AS next_id FROM "RESERVA"`
+    )
+    const nextIdReserva = maxReservaRows[0].next_id
+
+    await client.query(
       `INSERT INTO "RESERVA"
          ("ID_RESERVA", "FECHA_INICIO", "FECHA_FIN",
           "ID_ESTADO", "ID_EMPLEADO", "ID_CLIENTE",
           "ID_ORIGEN", "ID_DESTINO")
-       VALUES
-         (nextval('"RESERVA_ID_RESERVA_seq"'), $1, $2, $3, $4, $5, $6, $7)
-       RETURNING "ID_RESERVA"`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
-        fecha_inicio, fecha_fin,
-        idEstado, idEmpleado, idCliente,
-        idOrigen, idDestino,
+        nextIdReserva, fecha_inicio, fecha_fin, idEstado, idEmpleado, idCliente, idOrigen, idDestino
       ]
     )
-    const idReserva = reservaRows[0].ID_RESERVA
+    const idReserva = nextIdReserva
 
     // ── 8. Insertar DETALLE_RESERVA ─────────────────────────
+    const { rows: maxDetalleRows } = await client.query(
+      `SELECT COALESCE(MAX("ID_DETALLE"), 0) + 1 AS next_id FROM "DETALLE_RESERVA"`
+    )
+    const nextIdDetalle = maxDetalleRows[0].next_id
+
     const { rows: detalleRows } = await client.query(
       `INSERT INTO "DETALLE_RESERVA"
          ("ID_DETALLE", "CANTIDAD_NOCHE", "FECHA_INICIO", "FECHA_FIN",
@@ -195,11 +201,10 @@ router.post('/checkout', authenticateToken, async (req, res) => {
           "MONTO_CARGOS", "MONTO_RECARGO", "FECHA_LIMITE_CANCELACION",
           "ID_HABITACION")
        VALUES
-         (nextval('"DETALLE_RESERVA_ID_DETALLE_seq"'),
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING "ID_DETALLE"`,
       [
-        cantidadNoches, fecha_inicio, fecha_fin,
+        nextIdDetalle, cantidadNoches, fecha_inicio, fecha_fin,
         precioTotal, idReserva, idPlanProteccion,
         costoProteccion, tipo_pago, montoImpuestos,
         montoCargos, montoRecargo, fechaLimiteCancelacion,
@@ -299,9 +304,9 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       `INSERT INTO "NOTIFICACION"
          ("ID_CLIENTE", "ID_TIPO", "ID_CANAL",
           "ID_RESERVA", "TITULO", "MENSAJE")
-       SELECT $1, t."ID_TIPO", c."ID_CANAL", $2,
+       SELECT $1, t."ID_TIPO", c."ID_CANAL", $2::integer,
               'Reserva confirmada',
-              'Tu reserva #' || $2 || ' fue procesada exitosamente.'
+              'Tu reserva #' || $2::text || ' fue procesada exitosamente.'
        FROM "TIPO_NOTIFICACION" t, "CANAL_NOTIFICACION" c
        WHERE LOWER(t."NOMBRE")  LIKE '%reserva%'
          AND LOWER(c."NOMBRE")  LIKE '%sistema%'
