@@ -198,35 +198,54 @@ const authController = {
       const idEmpleado = user?.ID_EMPLEADO
 
       if (!user) {
-        // 1. Crear PERSONA
-        const { rows: personaRows } = await db.query(
-          `INSERT INTO public."PERSONA" ("NOMBRE_COMPLETO")
-           VALUES ($1)
-           RETURNING "ID_PERSONA"`,
-          [nombre]
-        )
-        const idPersona = personaRows[0].ID_PERSONA
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
 
-        // 2. Crear USUARIO
-        const { rows } = await db.query(
-          `INSERT INTO public."USUARIO" ("USUARIO", "CORREO_ELECTRONICO", "GOOGLE_ID", "ID_PERSONA")
-           VALUES ($1, $2, $3, $4)
-           RETURNING "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"`,
-          [nombre, email.toLowerCase(), googleId, idPersona]
-        )
-        user = rows[0]
+          // 1. ID manual seguro para PERSONA
+          const { rows: [{ next_persona_id }] } = await client.query(
+            `SELECT COALESCE(MAX("ID_PERSONA"), 0) + 1 AS next_persona_id FROM public."PERSONA"`
+          )
 
-        // 3. Crear CLIENTE
-        await db.query(
-          `INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE")
-           VALUES ($1, 'A')
-           ON CONFLICT DO NOTHING`,
-          [idPersona]
-        )
+          // 2. Crear PERSONA
+          await client.query(
+            `INSERT INTO public."PERSONA" ("ID_PERSONA", "NOMBRE_COMPLETO")
+             VALUES ($1, $2)`,
+            [next_persona_id, nombre]
+          )
 
-        console.log('Nuevo usuario creado con Google:', user.CORREO_ELECTRONICO)
+          // 3. ID manual seguro para USUARIO
+          const { rows: [{ next_user_id }] } = await client.query(
+            `SELECT COALESCE(MAX("ID_USUARIO"), 0) + 1 AS next_user_id FROM public."USUARIO"`
+          )
+
+          // 4. Crear USUARIO
+          const { rows: userRows } = await client.query(
+            `INSERT INTO public."USUARIO" ("ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO", "GOOGLE_ID", "ID_PERSONA")
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"`,
+            [next_user_id, nombre, email.toLowerCase(), googleId, next_persona_id]
+          )
+          user = userRows[0]
+
+          // 5. Crear CLIENTE
+          await client.query(
+            `INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE")
+             VALUES ($1, 'A')
+             ON CONFLICT DO NOTHING`,
+            [next_persona_id]
+          )
+
+          await client.query('COMMIT')
+          console.log('Nuevo usuario creado con Google:', user.CORREO_ELECTRONICO)
+        } catch (e) {
+          await client.query('ROLLBACK')
+          throw e
+        } finally {
+          client.release()
+        }
       } else if (!user.GOOGLE_ID) {
-        const { rows } = await db.query(
+        const { rows } = await pool.query(
           `UPDATE public."USUARIO"
            SET "GOOGLE_ID" = $1
            WHERE "ID_USUARIO" = $2
