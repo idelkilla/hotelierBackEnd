@@ -126,8 +126,8 @@ const authController = {
 
         // 6. Crear CLIENTE vinculado a PERSONA
         await client.query(
-          `INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE")
-           VALUES ($1, 'A')
+          `INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE", "FECHA_REGISTRO")
+           VALUES ($1, 'A', CURRENT_DATE)
            ON CONFLICT DO NOTHING`,
           [next_persona_id]
         )
@@ -230,8 +230,8 @@ const authController = {
 
           // 5. Crear CLIENTE
           await client.query(
-            `INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE")
-             VALUES ($1, 'A')
+            `INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE", "FECHA_REGISTRO")
+             VALUES ($1, 'A', CURRENT_DATE)
              ON CONFLICT DO NOTHING`,
             [next_persona_id]
           )
