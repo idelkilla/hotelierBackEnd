@@ -161,6 +161,7 @@ router.get('/:id/habitaciones-base', async (req, res) => {
   }
 })
 
+// ✅ GET sin autenticación (público)
 // GET /api/hospedaje/:id/resenas
 router.get('/:id/resenas', async (req, res) => {
   const pool = getPool()
@@ -194,6 +195,7 @@ router.get('/:id/resenas', async (req, res) => {
   }
 })
 
+// ✅ POST con autenticación (requiere sesión)
 // POST /api/hospedaje/:id/resenas
 router.post('/:id/resenas', authenticateToken, async (req, res) => {
   const pool = getPool()
