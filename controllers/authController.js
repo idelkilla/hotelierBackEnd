@@ -16,13 +16,12 @@ const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID)
 
 const authController = {
 
-  // ✅ LOGIN
+  // LOGIN
   login: async (req, res) => {
-    console.log('📥 Login body recibido:', req.body)
+    console.log('Login body recibido:', req.body)
     try {
       const { email, usuarioOrEmail, password } = req.body
       const identifier = (email || usuarioOrEmail || '').toLowerCase()
-      console.log('🔍 Identifier:', identifier)
 
       if (!identifier || !password)
         return res.status(400).json({ message: 'Email y contraseña son requeridos' })
@@ -40,7 +39,6 @@ const authController = {
       if (!user)
         return res.status(401).json({ message: 'Credenciales inválidas' })
 
-      // Si la cuenta es de Google y no tiene contraseña
       if (!user.CONTRASENA && user.GOOGLE_ID)
         return res.status(401).json({ message: 'Esta cuenta usa Google para iniciar sesión' })
 
@@ -67,7 +65,7 @@ const authController = {
     }
   },
 
-  // ✅ REGISTER
+  // REGISTER
   register: async (req, res) => {
     try {
       const { nombre, email, password, confirmPassword } = req.body
@@ -92,13 +90,32 @@ const authController = {
 
       const hashedPassword = await bcrypt.hash(password, 10)
 
+      // 1. Crear PERSONA
+      const { rows: personaRows } = await db.query(
+        `INSERT INTO public."PERSONA" ("NOMBRE_COMPLETO")
+         VALUES ($1)
+         RETURNING "ID_PERSONA"`,
+        [nombre]
+      )
+      const idPersona = personaRows[0].ID_PERSONA
+
+      // 2. Crear USUARIO vinculado a PERSONA
       const { rows } = await db.query(
-        `INSERT INTO public."USUARIO" ("USUARIO", "CORREO_ELECTRONICO", "CONTRASENA")
-         VALUES ($1, $2, $3)
+        `INSERT INTO public."USUARIO" ("USUARIO", "CORREO_ELECTRONICO", "CONTRASENA", "ID_PERSONA")
+         VALUES ($1, $2, $3, $4)
          RETURNING "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"`,
-        [nombre, email.toLowerCase(), hashedPassword]
+        [nombre, email.toLowerCase(), hashedPassword, idPersona]
       )
       const newUser = rows[0]
+
+      // 3. Crear CLIENTE vinculado a PERSONA
+      await db.query(
+        `INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE")
+         VALUES ($1, 'A')
+         ON CONFLICT DO NOTHING`,
+        [idPersona]
+      )
+
       const token = generateToken(newUser.ID_USUARIO)
 
       res.status(201).json({
@@ -107,7 +124,8 @@ const authController = {
         user: {
           id: newUser.ID_USUARIO,
           nombre: newUser.USUARIO,
-          email: newUser.CORREO_ELECTRONICO
+          email: newUser.CORREO_ELECTRONICO,
+          role: 'user'
         }
       })
     } catch (error) {
@@ -116,7 +134,7 @@ const authController = {
     }
   },
 
-  // ✅ GOOGLE LOGIN
+  // GOOGLE LOGIN
   googleLogin: async (req, res) => {
     try {
       const { credential } = req.body
@@ -131,7 +149,7 @@ const authController = {
           audience: GOOGLE_CLIENT_ID
         })
       } catch (verifyError) {
-        console.error('❌ Verificación Google falló:', verifyError.message)
+        console.error('Verificación Google falló:', verifyError.message)
         return res.status(400).json({
           message: 'Token de Google inválido o expirado',
           detail: verifyError.message
@@ -139,11 +157,9 @@ const authController = {
       }
 
       const payload = ticket.getPayload()
-      console.log('📧 Google payload:', { email: payload.email, name: payload.name, sub: payload.sub })
-      
       const googleId = payload.sub
-      const email = payload.email
-      const nombre = payload.name || email.split('@')[0]
+      const email    = payload.email
+      const nombre   = payload.name || email.split('@')[0]
 
       const db = getPool()
 
@@ -158,17 +174,34 @@ const authController = {
       const idEmpleado = user?.ID_EMPLEADO
 
       if (!user) {
-        // Crear nuevo usuario desde Google
+        // 1. Crear PERSONA
+        const { rows: personaRows } = await db.query(
+          `INSERT INTO public."PERSONA" ("NOMBRE_COMPLETO")
+           VALUES ($1)
+           RETURNING "ID_PERSONA"`,
+          [nombre]
+        )
+        const idPersona = personaRows[0].ID_PERSONA
+
+        // 2. Crear USUARIO
         const { rows } = await db.query(
-          `INSERT INTO public."USUARIO" ("USUARIO", "CORREO_ELECTRONICO", "GOOGLE_ID")
-           VALUES ($1, $2, $3)
+          `INSERT INTO public."USUARIO" ("USUARIO", "CORREO_ELECTRONICO", "GOOGLE_ID", "ID_PERSONA")
+           VALUES ($1, $2, $3, $4)
            RETURNING "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"`,
-          [nombre, email.toLowerCase(), googleId]
+          [nombre, email.toLowerCase(), googleId, idPersona]
         )
         user = rows[0]
-        console.log('👤 Nuevo usuario creado con Google:', user.CORREO_ELECTRONICO)
+
+        // 3. Crear CLIENTE
+        await db.query(
+          `INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE")
+           VALUES ($1, 'A')
+           ON CONFLICT DO NOTHING`,
+          [idPersona]
+        )
+
+        console.log('Nuevo usuario creado con Google:', user.CORREO_ELECTRONICO)
       } else if (!user.GOOGLE_ID) {
-        // Vincular Google a cuenta existente
         const { rows } = await db.query(
           `UPDATE public."USUARIO"
            SET "GOOGLE_ID" = $1
@@ -177,7 +210,7 @@ const authController = {
           [googleId, user.ID_USUARIO]
         )
         user = rows[0]
-        console.log('🔗 Cuenta vinculada a Google:', user.CORREO_ELECTRONICO)
+        console.log('Cuenta vinculada a Google:', user.CORREO_ELECTRONICO)
       }
 
       const role = idEmpleado ? 'admin' : 'user'
@@ -194,7 +227,7 @@ const authController = {
         }
       })
     } catch (error) {
-      console.error('❌ Error crítico Google login:', error)
+      console.error('Error crítico Google login:', error)
       res.status(500).json({
         message: 'Error interno al procesar el login de Google',
         detail: error.message
@@ -202,11 +235,7 @@ const authController = {
     }
   },
 
-  // ✅ FORGOT PASSWORD
-  // NOTA: La tabla USUARIO no tiene columnas de reset token.
-  // Necesitas ejecutar este SQL en Neon para agregárselas:
-  // ALTER TABLE public."USUARIO" ADD COLUMN IF NOT EXISTS "RESET_TOKEN" TEXT;
-  // ALTER TABLE public."USUARIO" ADD COLUMN IF NOT EXISTS "RESET_TOKEN_EXPIRY" TIMESTAMPTZ;
+  // FORGOT PASSWORD
   forgotPassword: async (req, res) => {
     try {
       const { email } = req.body
@@ -223,9 +252,9 @@ const authController = {
       if (!user)
         return res.json({ message: 'Si el email existe, recibirás un enlace' })
 
-      const resetToken = crypto.randomBytes(32).toString('hex')
+      const resetToken  = crypto.randomBytes(32).toString('hex')
       const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex')
-      const expiry = new Date(Date.now() + 3600000) // 1 hora
+      const expiry      = new Date(Date.now() + 3600000)
 
       await db.query(
         `UPDATE public."USUARIO"
@@ -247,7 +276,7 @@ const authController = {
     }
   },
 
-  // ✅ VERIFY RESET TOKEN
+  // VERIFY RESET TOKEN
   verifyResetToken: async (req, res) => {
     try {
       const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex')
@@ -268,7 +297,7 @@ const authController = {
     }
   },
 
-  // ✅ RESET PASSWORD
+  // RESET PASSWORD
   resetPassword: async (req, res) => {
     try {
       const { token, newPassword, confirmPassword } = req.body
