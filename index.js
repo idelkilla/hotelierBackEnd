@@ -7,7 +7,7 @@ import { connectDB } from './db.js'
 
 import authRoutes from './routes/authRoutes.js'
 import searchRoutes from './routes/searchRoutes.js'
-import perfilRoutes from './routes/perfilRoutes.js'
+import perfilRoutes from './routes/Perfilroutes.js'
 import hospedajesRouter from './routes/hospedajes.js'
 import dashboardRouter from './routes/dashboard.js'
 import catalogosRouter from './routes/catalogos.js'
