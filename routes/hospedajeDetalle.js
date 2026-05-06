@@ -231,7 +231,7 @@ router.post('/:id/resenas', authenticateToken, async (req, res) => {
     await pool.query(
       `INSERT INTO public."RESENA" ("ID_RESENA", "COMENTARIO", "CALIFICACION", "ID_CLIENTE", "ID_SERVICIO")
        VALUES ($1, $2, $3, $4, $5)`,
-      [next_id, comentario.trim(), calificacion, idCliente, id]
+      [next_id, comentario.trim(), calificacion, idPersona, id]
     )
 
     res.status(201).json({ ok: true, id_resena: next_id })
