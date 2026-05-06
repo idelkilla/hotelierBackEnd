@@ -304,9 +304,9 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       `INSERT INTO "NOTIFICACION"
          ("ID_CLIENTE", "ID_TIPO", "ID_CANAL",
           "ID_RESERVA", "TITULO", "MENSAJE")
-       SELECT $1, t."ID_TIPO", c."ID_CANAL", $2,
+       SELECT $1, t."ID_TIPO", c."ID_CANAL", $2::integer,
               'Reserva confirmada',
-              'Tu reserva #' || $2 || ' fue procesada exitosamente.'
+              'Tu reserva #' || $2::text || ' fue procesada exitosamente.'
        FROM "TIPO_NOTIFICACION" t, "CANAL_NOTIFICACION" c
        WHERE LOWER(t."NOMBRE")  LIKE '%reserva%'
          AND LOWER(c."NOMBRE")  LIKE '%sistema%'
