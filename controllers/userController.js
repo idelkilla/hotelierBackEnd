@@ -363,7 +363,7 @@ export const updateProfile = async (req, res) => {
            WHERE "ID_TELEFONO" = $3`,
           [
             data.telefono_numero,
-            data.codigo_pais ?? null,
+            data.codigo_pais ? String(data.codigo_pais).slice(0, 5) : null,
             existsTel.rows[0].ID_TELEFONO,
           ]
         )
@@ -388,7 +388,7 @@ export const updateProfile = async (req, res) => {
            VALUES ($1, $2, $3, 'A', $4, $5)`,
           [
             nextId,
-            data.codigo_pais ?? '+1-809',
+            data.codigo_pais ? String(data.codigo_pais).slice(0, 5) : '+1809',
             data.telefono_numero,
             idTipoTel,
             idPersona,
