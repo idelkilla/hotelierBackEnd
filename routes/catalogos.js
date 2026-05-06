@@ -557,6 +557,13 @@ router.get(
 )
 
 router.get(
+  '/nacionalidades',
+  makeGet(
+    `SELECT "ID_NACIONALIDAD", "NOMBRE_NACIONALIDAD" FROM public."NACIONALIDAD" ORDER BY "NOMBRE_NACIONALIDAD"`,
+  ),
+)
+
+router.get(
   '/tipos-documentacion',
   makeGet(
     `SELECT "ID_TIPO", "TIPO" FROM public."TIPO_DOCUMENTACION" ORDER BY "TIPO"`,
