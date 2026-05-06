@@ -225,80 +225,80 @@ router.get('/hospedaje/:id_hospedaje/detalle', async (req, res, next) => {
   const { desde, hasta } = req.query
 
   try {
-    let querySql;
-    let queryParams = [id_hospedaje];
+    let querySql
+    let queryParams = [id_hospedaje]
 
-    // Si se proporcionan ambas fechas, filtramos por disponibilidad real
     if (desde && hasta) {
-      queryParams.push(desde, hasta);
+      queryParams.push(desde, hasta)
       querySql = `
-      SELECT 
-        h."ID_HABITACION",
-        h."ID_HOSPEDAJE",
-        h."CAPACIDAD_ADULTO",
-        h."CAPACIDAD_NINOS",
-        h."PRECIO_NOCHE",
-        h."METROS_CUADRADOS",
-        h."DESCRIPCION",
-        t."NOMBRE" AS "TIPO_HABITACION",
-        h."TIPO_CAMA",
-        (
-          SELECT json_agg(si."NOMBRE")
-          FROM public."HABITACION_SERVICIO" hs
-          JOIN public."SERVICIO_INCLUIDO" si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
-          WHERE hs."ID_HABITACION" = h."ID_HABITACION"
-        ) AS "SERVICIOS",
-        (
-          SELECT json_agg(img."URL" ORDER BY img."ORDEN")
-          FROM public."IMAGEN_HOSPEDAJE" img
-          WHERE img."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
-        ) AS "IMAGENES",
-        COALESCE((
-          SELECT MIN(d."CANTIDAD_DISPONIBLE")
-          FROM public."DISPONIBILIDAD" d
-          WHERE d."ID_HABITACION" = h."ID_HABITACION"
-            AND d."FECHA" BETWEEN $2 AND $3
-            AND d."ESTADO" = 'A'
-        ), 0) AS "DISPONIBLE"
-      FROM public."HABITACION" h
-      LEFT JOIN public."TIPO_HABITACION" t ON t."ID_TIPO_HABITACION" = h."ID_TIPO_HABITACION"
-      WHERE h."ID_HOSPEDAJE" = $1
-      ORDER BY h."PRECIO_NOCHE" ASC
-    `;
+        SELECT 
+          h."ID_HABITACION",
+          h."ID_HOSPEDAJE",
+          h."CAPACIDAD_ADULTO",
+          h."CAPACIDAD_NINOS",
+          h."PRECIO_NOCHE",
+          h."METROS_CUADRADOS",
+          h."DESCRIPCION",
+          t."NOMBRE" AS "TIPO_HABITACION",
+          tc."NOMBRE" AS "TIPO_CAMA",
+          (
+            SELECT json_agg(si."NOMBRE")
+            FROM public."HABITACION_SERVICIO" hs
+            JOIN public."SERVICIO_INCLUIDO" si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
+            WHERE hs."ID_HABITACION" = h."ID_HABITACION"
+          ) AS "SERVICIOS",
+          (
+            SELECT json_agg(img."URL" ORDER BY img."ORDEN")
+            FROM public."IMAGEN_HOSPEDAJE" img
+            WHERE img."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
+          ) AS "IMAGENES",
+          COALESCE((
+            SELECT MIN(d."CANTIDAD_DISPONIBLE")
+            FROM public."DISPONIBILIDAD" d
+            WHERE d."ID_HABITACION" = h."ID_HABITACION"
+              AND d."FECHA" BETWEEN $2 AND $3
+              AND d."ESTADO" = 'D'
+          ), 1) AS "DISPONIBLE"
+        FROM public."HABITACION" h
+        LEFT JOIN public."TIPO_HABITACION" t ON t."ID_TIPO_HABITACION" = h."ID_TIPO_HABITACION"
+        LEFT JOIN public."TIPO_CAMA" tc ON tc."ID_TIPO_CAMA" = h."ID_TIPO_CAMA"
+        WHERE h."ID_HOSPEDAJE" = $1
+        ORDER BY h."PRECIO_NOCHE" ASC
+      `
     } else {
-      // Si no hay fechas, devolvemos la información base con un valor por defecto de disponibilidad
       querySql = `
-      SELECT 
-        h."ID_HABITACION",
-        h."ID_HOSPEDAJE",
-        h."CAPACIDAD_ADULTO",
-        h."CAPACIDAD_NINOS",
-        h."PRECIO_NOCHE",
-        h."METROS_CUADRADOS",
-        h."DESCRIPCION",
-        t."NOMBRE" AS "TIPO_HABITACION",
-        h."TIPO_CAMA",
-        (
-          SELECT json_agg(si."NOMBRE")
-          FROM public."HABITACION_SERVICIO" hs
-          JOIN public."SERVICIO_INCLUIDO" si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
-          WHERE hs."ID_HABITACION" = h."ID_HABITACION"
-        ) AS "SERVICIOS",
-        (
-          SELECT json_agg(img."URL" ORDER BY img."ORDEN")
-          FROM public."IMAGEN_HOSPEDAJE" img
-          WHERE img."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
-        ) AS "IMAGENES",
-        100 AS "DISPONIBLE" -- Valor por defecto cuando no se consultan fechas
-      FROM public."HABITACION" h
-      LEFT JOIN public."TIPO_HABITACION" t ON t."ID_TIPO_HABITACION" = h."ID_TIPO_HABITACION"
-      WHERE h."ID_HOSPEDAJE" = $1
-      ORDER BY h."PRECIO_NOCHE" ASC
-    `;
+        SELECT 
+          h."ID_HABITACION",
+          h."ID_HOSPEDAJE",
+          h."CAPACIDAD_ADULTO",
+          h."CAPACIDAD_NINOS",
+          h."PRECIO_NOCHE",
+          h."METROS_CUADRADOS",
+          h."DESCRIPCION",
+          t."NOMBRE" AS "TIPO_HABITACION",
+          tc."NOMBRE" AS "TIPO_CAMA",
+          (
+            SELECT json_agg(si."NOMBRE")
+            FROM public."HABITACION_SERVICIO" hs
+            JOIN public."SERVICIO_INCLUIDO" si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
+            WHERE hs."ID_HABITACION" = h."ID_HABITACION"
+          ) AS "SERVICIOS",
+          (
+            SELECT json_agg(img."URL" ORDER BY img."ORDEN")
+            FROM public."IMAGEN_HOSPEDAJE" img
+            WHERE img."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
+          ) AS "IMAGENES",
+          1 AS "DISPONIBLE"
+        FROM public."HABITACION" h
+        LEFT JOIN public."TIPO_HABITACION" t ON t."ID_TIPO_HABITACION" = h."ID_TIPO_HABITACION"
+        LEFT JOIN public."TIPO_CAMA" tc ON tc."ID_TIPO_CAMA" = h."ID_TIPO_CAMA"
+        WHERE h."ID_HOSPEDAJE" = $1
+        ORDER BY h."PRECIO_NOCHE" ASC
+      `
     }
 
-    const { rows } = await db.query(querySql, queryParams);
-    res.json(rows);
+    const { rows } = await db.query(querySql, queryParams)
+    res.json(rows)
   } catch (err) {
     next(err)
   }
