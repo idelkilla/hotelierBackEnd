@@ -44,7 +44,7 @@ router.get('/:id/servicios', async (req, res) => {
   const { id } = req.params
   try {
     const { rows } = await pool.query(`
-      SELECT si."NOMBRE"
+      SELECT si."NOMBRE" AS nombre
       FROM "HOSPEDAJE_SERVICIO" hs
       JOIN "SERVICIO_INCLUIDO" si
         ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
@@ -95,7 +95,10 @@ router.get('/:id/anfitrion', async (req, res) => {
       GROUP BY per."NOMBRE_COMPLETO", per."APELLIDOS", car."NOMBRE_CARGO"
       LIMIT 1
     `, [id])
-    if (!rows.length) return res.status(404).json({ error: 'Sin anfitrión' })
+    
+    // Retornamos 200 con null si no hay datos, evitando el error 404 en consola.
+    if (!rows.length) return res.json(null)
+    
     res.json(rows[0])
   } catch (e) {
     res.status(500).json({ error: e.message })
