@@ -334,4 +334,31 @@ router.post('/', async (req, res, next) => {
   }
 })
 
+// POST /api/hospedaje/:id/resenas
+router.post('/:id/resenas', authenticateToken, async (req, res, next) => {
+  try {
+    const idPersona = req.user.id_persona
+    const { calificacion, comentario } = req.body
+
+    if (!calificacion || calificacion < 1 || calificacion > 5)
+      return res.status(400).json({ error: 'Calificación inválida (1-5)' })
+    if (!comentario?.trim())
+      return res.status(400).json({ error: 'El comentario es requerido' })
+
+    // En este sistema, ID_HOSPEDAJE es igual al ID_SERVICIO
+    const idServicio = req.params.id
+
+    const { rows: [{ next: idResena }] } = await query(
+      `SELECT COALESCE(MAX("ID_RESENA"), 0) + 1 AS next FROM public."RESENA"`
+    )
+
+    await query(`
+      INSERT INTO public."RESENA" ("ID_RESENA","COMENTARIO","CALIFICACION","ID_CLIENTE","ID_SERVICIO")
+      VALUES ($1, $2, $3, $4, $5)
+    `, [idResena, comentario.trim(), calificacion, idPersona, idServicio])
+
+    res.status(201).json({ ok: true, id_resena: idResena })
+  } catch (err) { next(err) }
+})
+
 export default router
