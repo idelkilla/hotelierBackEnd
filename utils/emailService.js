@@ -9,6 +9,7 @@ const transporter = nodemailer.createTransport({
   port: 587,
   secure: false,        // false = STARTTLS
   service: 'gmail',
+  family: 4,           // Fuerza IPv4
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS   // App Password de Google, no tu contraseña normal
