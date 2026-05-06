@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { getPool } from '../db.js'
+import { authenticateToken } from '../middleware/authMiddleware.js'
 
 const router = Router()
 
@@ -175,7 +176,7 @@ router.get('/:id/resenas', async (req, res) => {
         COALESCE(pa."NOMBRE", 'Desconocido')             AS pais,
         'Reciente'                                       AS fecha,
         ROUND(r."CALIFICACION"::NUMERIC)::INTEGER        AS calificacion,
-        r."COMENTARIO"                                   AS texto,
+        r."COMENTARIO"                                   AS comentario,
         0                                                AS likes
       FROM "RESENA" r
       LEFT JOIN "CLIENTE"   c  ON c."ID_CLIENTE"   = r."ID_CLIENTE"
@@ -194,31 +195,44 @@ router.get('/:id/resenas', async (req, res) => {
 })
 
 // POST /api/hospedaje/:id/resenas
-router.post('/:id/resenas', async (req, res) => {
+router.post('/:id/resenas', authenticateToken, async (req, res) => {
   const pool = getPool()
-  const { id } = req.params // id_servicio
-  const { calificacion, comentario, id_cliente } = req.body // id_cliente is optional, for now assume anonymous or a default client
+  const { id } = req.params
+  const { calificacion, comentario } = req.body
 
-  // Basic validation
-  if (!calificacion || !comentario) {
-    return res.status(400).json({ error: 'Calificación y comentario son requeridos.' })
-  }
-  if (calificacion < 1 || calificacion > 5) {
-    return res.status(400).json({ error: 'La calificación debe ser entre 1 y 5.' })
-  }
+  if (!calificacion || calificacion < 1 || calificacion > 5)
+    return res.status(400).json({ error: 'Calificación inválida (1–5)' })
+  if (!comentario?.trim())
+    return res.status(400).json({ error: 'El comentario es requerido' })
+
+  // id_persona viene del token JWT (authMiddleware lo adjunta a req.user)
+  const idPersona = req.user?.id_persona
+  if (!idPersona)
+    return res.status(401).json({ error: 'No autenticado' })
 
   try {
-    // For now, assume a default client ID if not provided, or handle anonymous reviews
-    // In a real app, you'd get id_cliente from session/auth
-    const clientId = id_cliente || null; // Replace with actual client ID logic
+    // Obtener id_cliente a partir de id_persona
+    const { rows: clientRows } = await pool.query(
+      `SELECT "ID_CLIENTE" FROM public."CLIENTE" WHERE "ID_CLIENTE" = $1`,
+      [idPersona]
+    )
+    if (!clientRows.length)
+      return res.status(403).json({ error: 'No tienes perfil de cliente' })
 
-    const { rows } = await pool.query(`
-      INSERT INTO "RESENA" ("ID_SERVICIO", "ID_CLIENTE", "CALIFICACION", "COMENTARIO", "FECHA_RESENA")
-      VALUES ($1, $2, $3, $4, NOW())
-      RETURNING "ID_RESENA", "FECHA_RESENA"
-    `, [id, clientId, calificacion, comentario])
+    const idCliente = clientRows[0].ID_CLIENTE
 
-    res.status(201).json({ message: 'Reseña publicada con éxito', id: rows[0].ID_RESENA, fecha: rows[0].FECHA_RESENA })
+    // ID manual seguro (hasta que agregues GENERATED IDENTITY a la tabla)
+    const { rows: [{ next_id }] } = await pool.query(
+      `SELECT COALESCE(MAX("ID_RESENA"), 0) + 1 AS next_id FROM public."RESENA"`
+    )
+
+    await pool.query(
+      `INSERT INTO public."RESENA" ("ID_RESENA", "COMENTARIO", "CALIFICACION", "ID_CLIENTE", "ID_SERVICIO")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [next_id, comentario.trim(), calificacion, idCliente, id]
+    )
+
+    res.status(201).json({ ok: true, id_resena: next_id })
   } catch (e) {
     console.error('❌ ERROR publicando reseña:', e.message)
     res.status(500).json({ error: e.message })
