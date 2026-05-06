@@ -240,7 +240,7 @@ router.post('/:id/resenas', authenticateToken, async (req, res) => {
     res.status(201).json({ ok: true, id_resena: next_id })
   } catch (e) {
     console.error('❌ ERROR publicando reseña:', e.message)
-    res.status(500).json({ error: e.message })
+    res.status(500).json({ error: e.message || 'Error interno del servidor al publicar la reseña.' })
   }
 })
 

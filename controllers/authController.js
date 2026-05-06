@@ -79,58 +79,82 @@ const authController = {
       if (password.length < 6)
         return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' })
 
-      const db = getPool()
+      const pool = getPool()
+      const client = await pool.connect()
 
-      const { rows: existing } = await db.query(
-        `SELECT "ID_USUARIO" FROM public."USUARIO" WHERE "CORREO_ELECTRONICO" = $1`,
-        [email.toLowerCase()]
-      )
-      if (existing.length > 0)
-        return res.status(400).json({ message: 'El email ya está registrado' })
+      try {
+        await client.query('BEGIN')
 
-      const hashedPassword = await bcrypt.hash(password, 10)
-
-      // 1. Crear PERSONA
-      const { rows: personaRows } = await db.query(
-        `INSERT INTO public."PERSONA" ("NOMBRE_COMPLETO")
-         VALUES ($1)
-         RETURNING "ID_PERSONA"`,
-        [nombre]
-      )
-      const idPersona = personaRows[0].ID_PERSONA
-
-      // 2. Crear USUARIO vinculado a PERSONA
-      const { rows } = await db.query(
-        `INSERT INTO public."USUARIO" ("USUARIO", "CORREO_ELECTRONICO", "CONTRASENA", "ID_PERSONA")
-         VALUES ($1, $2, $3, $4)
-         RETURNING "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"`,
-        [nombre, email.toLowerCase(), hashedPassword, idPersona]
-      )
-      const newUser = rows[0]
-
-      // 3. Crear CLIENTE vinculado a PERSONA
-      await db.query(
-        `INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE")
-         VALUES ($1, 'A')
-         ON CONFLICT DO NOTHING`,
-        [idPersona]
-      )
-
-      const token = generateToken(newUser.ID_USUARIO)
-
-      res.status(201).json({
-        message: 'Usuario registrado exitosamente',
-        token,
-        user: {
-          id: newUser.ID_USUARIO,
-          nombre: newUser.USUARIO,
-          email: newUser.CORREO_ELECTRONICO,
-          role: 'user'
+        // 1. Verificar si el email o usuario ya existen
+        const { rows: existing } = await client.query(
+          `SELECT "ID_USUARIO" FROM public."USUARIO" 
+           WHERE "CORREO_ELECTRONICO" = $1 OR "USUARIO" = $2`,
+          [email.toLowerCase(), nombre.trim()]
+        )
+        if (existing.length > 0) {
+          await client.query('ROLLBACK')
+          return res.status(400).json({ message: 'El email o nombre de usuario ya está registrado' })
         }
-      })
+
+        const hashedPassword = await bcrypt.hash(password, 10)
+
+        // 2. ID manual seguro para PERSONA
+        const { rows: [{ next_persona_id }] } = await client.query(
+          `SELECT COALESCE(MAX("ID_PERSONA"), 0) + 1 AS next_persona_id FROM public."PERSONA"`
+        )
+
+        // 3. Crear PERSONA
+        await client.query(
+          `INSERT INTO public."PERSONA" ("ID_PERSONA", "NOMBRE_COMPLETO")
+           VALUES ($1, $2)`,
+          [next_persona_id, nombre]
+        )
+
+        // 4. ID manual seguro para USUARIO
+        const { rows: [{ next_user_id }] } = await client.query(
+          `SELECT COALESCE(MAX("ID_USUARIO"), 0) + 1 AS next_user_id FROM public."USUARIO"`
+        )
+
+        // 5. Crear USUARIO vinculado a PERSONA
+        const { rows: userRows } = await client.query(
+          `INSERT INTO public."USUARIO" ("ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO", "CONTRASENA", "ID_PERSONA")
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING "ID_USUARIO", "USUARIO", "CORREO_ELECTRONICO"`,
+          [next_user_id, nombre, email.toLowerCase(), hashedPassword, next_persona_id]
+        )
+        const newUser = userRows[0]
+
+        // 6. Crear CLIENTE vinculado a PERSONA
+        await client.query(
+          `INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE")
+           VALUES ($1, 'A')
+           ON CONFLICT DO NOTHING`,
+          [next_persona_id]
+        )
+
+        await client.query('COMMIT')
+
+        const token = generateToken(newUser.ID_USUARIO)
+
+        res.status(201).json({
+          message: 'Usuario registrado exitosamente',
+          token,
+          user: {
+            id: newUser.ID_USUARIO,
+            nombre: newUser.USUARIO,
+            email: newUser.CORREO_ELECTRONICO,
+            role: 'user'
+          }
+        })
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
     } catch (error) {
       console.error('Error en register:', error)
-      res.status(500).json({ message: 'Error en servidor' })
+      res.status(500).json({ message: 'Error en servidor', detail: error.message })
     }
   },
 
