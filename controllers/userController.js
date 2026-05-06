@@ -312,17 +312,51 @@ export const updateProfile = async (req, res) => {
     // 6. TELEFONO
     if (data.telefono_numero !== undefined && idPersona) {
       const existsTel = await pool.query(
-        `SELECT "ID_TELEFONO" FROM public."TELEFONO"
-         WHERE "ID_PERSONA" = $1 AND "ESTADO_TELEFONO" = 'A'
+        `SELECT "ID_TELEFONO" FROM public."TELEFONO" 
+         WHERE "ID_PERSONA" = $1 AND "ESTADO_TELEFONO" = 'A' 
          LIMIT 1`,
         [idPersona]
       )
+
       if (existsTel.rows.length > 0) {
+        // ✅ Ya existe → solo actualizar número (y código si viene)
         await pool.query(
-          `UPDATE public."TELEFONO"
-           SET "NUMERO_TELEFONICO" = $1
-           WHERE "ID_TELEFONO" = $2`,
-          [data.telefono_numero, existsTel.rows[0].ID_TELEFONO]
+          `UPDATE public."TELEFONO" 
+           SET "NUMERO_TELEFONICO" = $1,
+               "CODIGO_PAIS" = COALESCE($2, "CODIGO_PAIS")
+           WHERE "ID_TELEFONO" = $3`,
+          [
+            data.telefono_numero,
+            data.codigo_pais ?? null,
+            existsTel.rows[0].ID_TELEFONO,
+          ]
+        )
+      } else {
+        // ✅ No existe → insertar con ID generado y tipo por defecto
+        const { rows: tipoTelRows } = await pool.query(
+          `SELECT "ID_TIPO" FROM public."TIPO_TELEFONO" LIMIT 1`
+        )
+        const idTipoTel = tipoTelRows[0]?.ID_TIPO ?? 1
+
+        // Generar el próximo ID manualmente (ID_TELEFONO no es serial)
+        const { rows: maxRows } = await pool.query(
+          `SELECT COALESCE(MAX("ID_TELEFONO"), 0) + 1 AS next_id 
+           FROM public."TELEFONO"`
+        )
+        const nextId = maxRows[0].next_id
+
+        await pool.query(
+          `INSERT INTO public."TELEFONO" 
+             ("ID_TELEFONO", "CODIGO_PAIS", "NUMERO_TELEFONICO", 
+              "ESTADO_TELEFONO", "ID_TIPO", "ID_PERSONA")
+           VALUES ($1, $2, $3, 'A', $4, $5)`,
+          [
+            nextId,
+            data.codigo_pais ?? '+1-809',
+            data.telefono_numero,
+            idTipoTel,
+            idPersona,
+          ]
         )
       }
     }
