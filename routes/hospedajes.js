@@ -2,6 +2,8 @@ import { Router } from 'express'
 import multer from 'multer'
 import path from 'path'
 import * as db from '../db.js'
+import { authenticateToken } from '../middleware/authMiddleware.js'
+
 
 const router = Router()
 
