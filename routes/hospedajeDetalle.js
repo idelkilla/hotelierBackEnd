@@ -12,7 +12,7 @@ router.get('/:id', async (req, res) => {
       SELECT
         s."ID_SERVICIO"        AS id,
         p."NOMBRE_LEGAL"       AS nombre,
-        h."DESCRIPCION",
+        h."DESCRIPCION"        AS descripcion,
         th."NOMBRE_TIPO"       AS tipo_hospedaje,
         u."NOMBRE"             AS ubicacion,
         c."NOMBRE"             AS ciudad,
@@ -134,49 +134,59 @@ router.get('/:id/disponibilidad', async (req, res) => {
   }
 })
 
+// GET /api/hospedaje/:id/habitaciones-base
+router.get('/:id/habitaciones-base', async (req, res) => {
+  const pool = getPool()
+  const { id } = req.params
+  try {
+    const { rows } = await pool.query(`
+      SELECT 
+        hab."ID_HABITACION" AS id,
+        th."NOMBRE"         AS tipo_habitacion,
+        hab."PRECIO_NOCHE"  AS precio_noche,
+        hab."CAPACIDAD_ADULTO",
+        hab."CAPACIDAD_NINOS"
+      FROM "HABITACION" hab
+      JOIN "TIPO_HABITACION" th ON th."ID_TIPO_HABITACION" = hab."ID_TIPO_HABITACION"
+      WHERE hab."ID_HOSPEDAJE" = $1
+      ORDER BY hab."PRECIO_NOCHE" ASC
+    `, [id])
+    res.json(rows)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // GET /api/hospedaje/:id/resenas
 router.get('/:id/resenas', async (req, res) => {
   const pool = getPool()
   const { id } = req.params
-  console.log('📌 Solicitando reseñas para hospedaje ID:', id)
   try {
     const { rows } = await pool.query(`
       SELECT
         r."ID_RESENA"                                    AS id,
         COALESCE(p."NOMBRE_COMPLETO", 'Anónimo')        AS nombre,
         COALESCE(p."APELLIDOS", '')                      AS apellidos,
-        SUBSTRING(
-          COALESCE(p."NOMBRE_COMPLETO", 'A'),
-          1, 1
-        ) || 
-        SUBSTRING(
-          COALESCE(p."APELLIDOS", '?'),
-          1, 1
-        )                                                AS initials,
+        SUBSTRING(COALESCE(p."NOMBRE_COMPLETO", 'A'), 1, 1) || 
+        SUBSTRING(COALESCE(p."APELLIDOS", '?'), 1, 1)   AS initials,
         COALESCE(pa."NOMBRE", 'Desconocido')             AS pais,
-        TO_CHAR(r."FECHA_CREACION", 'Month YYYY')        AS fecha,
+        'Reciente'                                       AS fecha,
         ROUND(r."CALIFICACION"::NUMERIC)::INTEGER        AS calificacion,
         r."COMENTARIO"                                   AS texto,
-        0                                                AS likes,
-        false                                            AS expanded
+        0                                                AS likes
       FROM "RESENA" r
-      LEFT JOIN "CLIENTE" c          ON c."ID_CLIENTE" = r."ID_CLIENTE"
-      LEFT JOIN "PERSONA" p          ON p."ID_PERSONA" = c."ID_CLIENTE"
-      LEFT JOIN "UBICACION" u          ON u."ID_UBICACION" = p."ID_UBICACION"
-      LEFT JOIN "CIUDAD" ci          ON ci."ID_CIUDAD" = u."ID_CIUDAD"
-      LEFT JOIN "PAIS" pa          ON pa."ID_PAIS" = ci."ID_PAIS"
+      LEFT JOIN "CLIENTE"   c  ON c."ID_CLIENTE"   = r."ID_CLIENTE"
+      LEFT JOIN "PERSONA"   p  ON p."ID_PERSONA"   = c."ID_CLIENTE"
+      LEFT JOIN "UBICACION" u  ON u."ID_UBICACION" = p."ID_UBICACION"
+      LEFT JOIN "CIUDAD"    ci ON ci."ID_CIUDAD"   = u."ID_CIUDAD"
+      LEFT JOIN "PAIS"      pa ON pa."ID_PAIS"     = ci."ID_PAIS"
       WHERE r."ID_SERVICIO" = $1
-      ORDER BY r."FECHA_CREACION" DESC
+      ORDER BY r."ID_RESENA" DESC
     `, [id])
-    console.log('✅ Reseñas encontradas:', rows.length)
     res.json(rows)
   } catch (e) {
-    console.error('❌ ERROR en /hospedaje/:id/resenas:', e.message)
-    console.error('Stack trace:', e.stack)
-    res.status(500).json({ 
-      error: 'Error al cargar reseñas',
-      details: e.message 
-    })
+    console.error('❌ ERROR reseñas:', e.message)
+    res.status(500).json({ error: e.message })
   }
 })
 
