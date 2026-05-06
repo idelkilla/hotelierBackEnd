@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { getPool } from '../db.js'
-import { verifyToken } from '../middleware/authMiddleware.js'
+import { authenticateToken } from '../middleware/authMiddleware.js'
 
 const router = Router()
 
@@ -43,7 +43,7 @@ router.get('/planes-proteccion', async (req, res) => {
 //   proteccion: { id_plan: number | null }
 // }
 // ─────────────────────────────────────────────────────────────
-router.post('/checkout', verifyToken, async (req, res) => {
+router.post('/checkout', authenticateToken, async (req, res) => {
   const pool = getPool()
   const client = await pool.connect()
 
@@ -67,10 +67,17 @@ router.post('/checkout', verifyToken, async (req, res) => {
       return res.status(400).json({ message: 'tipo_pago inválido.' })
     }
 
-    const idCliente = req.user.id_cliente
-    if (!idCliente) {
+    // Obtener ID_PERSONA del usuario para usarlo como ID_CLIENTE
+    const { rows: userRows } = await client.query(
+      `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`,
+      [req.user.id]
+    )
+
+    if (!userRows.length || !userRows[0].ID_PERSONA) {
       return res.status(401).json({ message: 'Usuario no autenticado como cliente.' })
     }
+
+    const idCliente = userRows[0].ID_PERSONA
 
     await client.query('BEGIN')
 
@@ -332,15 +339,22 @@ router.post('/checkout', verifyToken, async (req, res) => {
 // GET /api/reservas/mis-reservas
 // Devuelve las reservas del cliente autenticado.
 // ─────────────────────────────────────────────────────────────
-router.get('/mis-reservas', verifyToken, async (req, res) => {
+router.get('/mis-reservas', authenticateToken, async (req, res) => {
   try {
-    const pool     = getPool()
-    const idCliente = req.user.id_cliente
-    if (!idCliente) {
+    const pool = getPool()
+    // Obtener ID_PERSONA del usuario
+    const { rows: userRows } = await pool.query(
+      `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`,
+      [req.user.id]
+    )
+
+    if (!userRows.length || !userRows[0]?.ID_PERSONA) {
       return res.status(401).json({ message: 'No autenticado como cliente.' })
     }
 
-    const { rows } = await pool.query(
+    const idCliente = userRows[0].ID_PERSONA
+
+    const { rows } = await db.query(
       `SELECT
          r."ID_RESERVA",
          r."FECHA_INICIO",
@@ -385,11 +399,21 @@ router.get('/mis-reservas', verifyToken, async (req, res) => {
 // GET /api/reservas/:id
 // Detalle completo de una reserva específica.
 // ─────────────────────────────────────────────────────────────
-router.get('/:id', verifyToken, async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const pool      = getPool()
+    const pool = getPool()
     const idReserva = parseInt(req.params.id, 10)
-    const idCliente  = req.user.id_cliente
+
+    // Obtener ID_PERSONA del usuario
+    const { rows: userRows } = await pool.query(
+      `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`,
+      [req.user.id]
+    )
+
+    if (!userRows.length || !userRows[0]?.ID_PERSONA) {
+      return res.status(401).json({ message: 'No autenticado como cliente.' })
+    }
+    const idCliente = userRows[0]?.ID_PERSONA
 
     const { rows } = await pool.query(
       `SELECT
@@ -446,12 +470,21 @@ router.get('/:id', verifyToken, async (req, res) => {
 // DELETE /api/reservas/:id/cancelar
 // Cancela una reserva si está dentro del período de cancelación.
 // ─────────────────────────────────────────────────────────────
-router.delete('/:id/cancelar', verifyToken, async (req, res) => {
-  const pool   = getPool()
+router.delete('/:id/cancelar', authenticateToken, async (req, res) => {
+  const pool = getPool()
   const client = await pool.connect()
   try {
     const idReserva = parseInt(req.params.id, 10)
-    const idCliente  = req.user.id_cliente
+
+    // Obtener ID_PERSONA del usuario
+    const { rows: userRows } = await client.query(
+      `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`,
+      [req.user.id]
+    )
+    if (!userRows.length || !userRows[0].ID_PERSONA) {
+      return res.status(401).json({ message: 'No autenticado como cliente.' })
+    }
+    const idCliente = userRows[0].ID_PERSONA
 
     await client.query('BEGIN')
 

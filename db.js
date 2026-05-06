@@ -42,8 +42,6 @@ export const query = (text, params) => pool.query(text, params)
 export const connect = () => pool.connect()
 
 export const getPool = () => {
-  if (!pool) {
-    throw new Error('Pool no inicializado. Llama connectDB primero.')
-  }
+  if (!pool) throw new Error('Pool no inicializado.')
   return pool
 }
