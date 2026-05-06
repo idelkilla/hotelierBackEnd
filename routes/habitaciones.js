@@ -217,6 +217,84 @@ router.delete('/:id', async (req, res, next) => {
 })
 
 /**
+ * GET /api/habitaciones/hospedaje/:id_hospedaje/detalle
+ * Obtener detalles de habitaciones de un hospedaje, con disponibilidad opcional por fechas.
+ */
+router.get('/hospedaje/:id_hospedaje/detalle', async (req, res, next) => {
+  const { id_hospedaje } = req.params
+  const { desde, hasta } = req.query
+
+  try {
+    let querySql
+    let queryParams = [id_hospedaje]
+
+    if (desde && hasta) {
+      // Si se proporcionan fechas, buscar disponibilidad y precio ajustado
+      querySql = `
+        SELECT
+          hab."ID_HABITACION"                                AS "ID_HABITACION",
+          th."NOMBRE"                                        AS "TIPO_HABITACION",
+          hab."CAPACIDAD_ADULTO",
+          hab."CAPACIDAD_NINOS",
+          hab."PRECIO_NOCHE", -- Precio base
+          COALESCE(d."PRECIO_AJUSTADO", hab."PRECIO_NOCHE")  AS "PRECIO_NOCHE_CALCULADO",
+          COALESCE(d."CANTIDAD_DISPONIBLE", 0)               AS "DISPONIBLE",
+          hab."DESCRIPCION",
+          hab."METROS_CUADRADOS",
+          hab."TIPO_CAMA"
+        FROM public."HABITACION" hab
+        JOIN public."TIPO_HABITACION" th ON th."ID_TIPO_HABITACION" = hab."ID_TIPO_HABITACION"
+        LEFT JOIN public."DISPONIBILIDAD" d ON d."ID_HABITACION" = hab."ID_HABITACION"
+          AND d."FECHA" BETWEEN $2 AND $3
+          AND d."ESTADO" = 'A'
+        WHERE hab."ID_HOSPEDAJE" = $1
+        ORDER BY hab."PRECIO_NOCHE" ASC
+      `
+      queryParams.push(desde, hasta)
+    } else {
+      // Si no hay fechas, devolver información base de la habitación
+      querySql = `
+        SELECT
+          hab."ID_HABITACION" AS "ID_HABITACION",
+          th."NOMBRE"         AS "TIPO_HABITACION",
+          hab."CAPACIDAD_ADULTO",
+          hab."CAPACIDAD_NINOS",
+          hab."PRECIO_NOCHE",
+          100                 AS "DISPONIBLE", -- Asumimos alta disponibilidad si no hay fechas
+          hab."DESCRIPCION",
+          hab."METROS_CUADRADOS",
+          hab."TIPO_CAMA"
+        FROM public."HABITACION" hab
+        JOIN public."TIPO_HABITACION" th ON th."ID_TIPO_HABITACION" = hab."ID_TIPO_HABITACION"
+        WHERE hab."ID_HOSPEDAJE" = $1
+        ORDER BY hab."PRECIO_NOCHE" ASC
+      `
+    }
+
+    const { rows } = await db.query(querySql, queryParams)
+
+    // Fetch servicios para cada habitación
+    const habitacionesConServicios = await Promise.all(rows.map(async (hab) => {
+      const { rows: serviciosRows } = await db.query(`
+        SELECT si."NOMBRE"
+        FROM public."HABITACION_SERVICIO" hs
+        JOIN public."SERVICIO_INCLUIDO" si ON si."ID_SERVICIO_INCLUIDO" = hs."ID_SERVICIO_INCLUIDO"
+        WHERE hs."ID_HABITACION" = $1
+      `, [hab.ID_HABITACION])
+      return {
+        ...hab,
+        SERVICIOS: serviciosRows.map(s => s.NOMBRE),
+        PRECIO_NOCHE: hab.PRECIO_NOCHE_CALCULADO || hab.PRECIO_NOCHE, // Usar precio calculado si existe
+      }
+    }))
+
+    res.json(habitacionesConServicios)
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * GET /api/habitaciones/hospedaje/:id_hospedaje
  * Obtener todas las habitaciones de un hospedaje específico
  */
