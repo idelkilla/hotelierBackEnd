@@ -254,7 +254,11 @@ export const updateProfile = async (req, res) => {
     for (const [key, col] of Object.entries(bioCols)) {
       if (data[key] !== undefined) {
         bioFields.push(`${col} = $${idx++}`)
-        bioValues.push(data[key] || null)
+        // ✅ Convierte estatura y peso a string máx 5 chars (char(5))
+        const val = (key === 'estatura' || key === 'peso')
+          ? String(data[key]).slice(0, 5)
+          : (data[key] || null)
+        bioValues.push(val)
       }
     }
 
@@ -305,24 +309,90 @@ export const updateProfile = async (req, res) => {
           bioValues
         )
       } else {
-        console.warn('DATOS_BIOGRAFICOS no existe para ID_PERSONA', idPersona)
+        // ✅ No existe → INSERT con valores mínimos requeridos
+        const { rows: ocRows } = await pool.query(
+          `SELECT "ID_OCUPACION" FROM public."OCUPACION" LIMIT 1`
+        )
+        const { rows: naRows } = await pool.query(
+          `SELECT "ID_NACIONALIDAD" FROM public."NACIONALIDAD" LIMIT 1`
+        )
+        const { rows: ecRows } = await pool.query(
+          `SELECT "ID_ESTADO_CIVIL" FROM public."ESTADO_CIVIL" LIMIT 1`
+        )
+        const { rows: luRows } = await pool.query(
+          `SELECT "ID_LUGAR_NACIMIENTO" FROM public."LUGAR_NACIMIENTO" LIMIT 1`
+        )
+
+        await pool.query(
+          `INSERT INTO public."DATOS_BIOGRAFICOS"
+             ("ID_PERSONA", "FECHA_NACIMIENTO", "TIPO_SEXO", "SANGRE",
+              "ESTATURA", "PESO", "ID_OCUPACION", "ID_LUGAR_NACIMIENTO",
+              "ID_NACIONALIDAD", "ID_ESTADO_CIVIL")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            idPersona,
+            data.fecha_nacimiento || null,
+            data.genero           || 'No especificado',
+            data.sangre           || 'N/A',
+            data.estatura ? String(data.estatura).slice(0, 5) : '000',
+            data.peso     ? String(data.peso).slice(0, 5)     : '000',
+            data.id_ocupacion     ?? ocRows[0]?.ID_OCUPACION     ?? 1,
+            luRows[0]?.ID_LUGAR_NACIMIENTO ?? 1,
+            data.id_nacionalidad  ?? naRows[0]?.ID_NACIONALIDAD  ?? 1,
+            data.id_estado_civil  ?? ecRows[0]?.ID_ESTADO_CIVIL  ?? 1,
+          ]
+        )
       }
     }
 
     // 6. TELEFONO
     if (data.telefono_numero !== undefined && idPersona) {
       const existsTel = await pool.query(
-        `SELECT "ID_TELEFONO" FROM public."TELEFONO"
-         WHERE "ID_PERSONA" = $1 AND "ESTADO_TELEFONO" = 'A'
+        `SELECT "ID_TELEFONO" FROM public."TELEFONO" 
+         WHERE "ID_PERSONA" = $1 AND "ESTADO_TELEFONO" = 'A' 
          LIMIT 1`,
         [idPersona]
       )
+
       if (existsTel.rows.length > 0) {
+        // ✅ Ya existe → solo actualizar número (y código si viene)
         await pool.query(
-          `UPDATE public."TELEFONO"
-           SET "NUMERO_TELEFONICO" = $1
-           WHERE "ID_TELEFONO" = $2`,
-          [data.telefono_numero, existsTel.rows[0].ID_TELEFONO]
+          `UPDATE public."TELEFONO" 
+           SET "NUMERO_TELEFONICO" = $1,
+               "CODIGO_PAIS" = COALESCE($2, "CODIGO_PAIS")
+           WHERE "ID_TELEFONO" = $3`,
+          [
+            data.telefono_numero,
+            data.codigo_pais ? String(data.codigo_pais).slice(0, 5) : null,
+            existsTel.rows[0].ID_TELEFONO,
+          ]
+        )
+      } else {
+        // ✅ No existe → insertar con ID generado y tipo por defecto
+        const { rows: tipoTelRows } = await pool.query(
+          `SELECT "ID_TIPO" FROM public."TIPO_TELEFONO" LIMIT 1`
+        )
+        const idTipoTel = tipoTelRows[0]?.ID_TIPO ?? 1
+
+        // Generar el próximo ID manualmente (ID_TELEFONO no es serial)
+        const { rows: maxRows } = await pool.query(
+          `SELECT COALESCE(MAX("ID_TELEFONO"), 0) + 1 AS next_id 
+           FROM public."TELEFONO"`
+        )
+        const nextId = maxRows[0].next_id
+
+        await pool.query(
+          `INSERT INTO public."TELEFONO" 
+             ("ID_TELEFONO", "CODIGO_PAIS", "NUMERO_TELEFONICO", 
+              "ESTADO_TELEFONO", "ID_TIPO", "ID_PERSONA")
+           VALUES ($1, $2, $3, 'A', $4, $5)`,
+          [
+            nextId,
+            data.codigo_pais ? String(data.codigo_pais).slice(0, 5) : '+1809',
+            data.telefono_numero,
+            idTipoTel,
+            idPersona,
+          ]
         )
       }
     }
