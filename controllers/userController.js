@@ -25,17 +25,15 @@ export const getUsers = async (req, res, next) => {
     `)
     res.json(rows)
   } catch (error) {
-    console.error('❌ /api/usuarios query error:', error.message)
+    console.error('Error /api/usuarios:', error.message)
     res.status(400).json({ error: 'Error consultando usuarios', detail: error.message })
   }
 }
 
-// ─────────────────────────────────────────────
-// GET /api/user/profile
-// ─────────────────────────────────────────────
+// GET /api/perfil/profile
 export const getProfile = async (req, res) => {
   const userId = req.user?.id
-  console.log('📋 getProfile → userId:', userId)
+  console.log('getProfile → userId:', userId)
 
   try {
     const pool = getPool()
@@ -51,47 +49,47 @@ export const getProfile = async (req, res) => {
         p."NUM_DHS_TRIP"                   AS num_dhs_trip,
         p."CONTACTO_EMERGENCIA_NOMBRE"     AS contacto_emergencia_nombre,
         p."CONTACTO_EMERGENCIA_TEL"        AS contacto_emergencia_tel,
-        -- Ubicacion de la persona (ciudad/pais como texto via UBICACION)
+        p."ID_UBICACION"                   AS id_ubicacion,
         ub."NOMBRE"                        AS ubicacion_nombre,
-        -- Telefono principal activo
+        ub."ID_CIUDAD"                     AS id_ciudad,
+        ci."NOMBRE"                        AS ciudad_nombre,
+        ci."ID_PAIS"                       AS id_pais,
+        pa."NOMBRE"                        AS pais_nombre,
         t."NUMERO_TELEFONICO"              AS telefono_numero,
-        -- Datos biograficos
         db."FECHA_NACIMIENTO"              AS fecha_nacimiento,
         db."TIPO_SEXO"                     AS genero,
         db."SANGRE"                        AS "SANGRE",
         db."ESTATURA"                      AS "ESTATURA",
         db."PESO"                          AS "PESO",
-        -- Ocupacion y nacionalidad son FKs en DATOS_BIOGRAFICOS
         oc."NOMBRE"                        AS "OCUPACION",
         na."NOMBRE_NACIONALIDAD"           AS "NACIONALIDAD",
         ec."NOMBRE_ESTADO"                 AS "ESTADO_CIVIL",
-        -- Descripcion personal vive en CLIENTE
         cl."DESCRIPCION_PERSONAL"          AS descripcion_personal,
-        -- Membresia
         cl."ESTADO_CLIENTE"                AS status_cuenta,
         mi."PUNTOS_FIDELIDAD"              AS puntos,
         nm."NOMBRE_NIVEL"                  AS nivel_membresia,
         mi."NUMERO_MIEMBRO"                AS numero_miembro,
-        -- Documentacion
         doc."NUMERO_DOCUMENTACION"         AS doc_numero,
         doc."FECHA_EMISION"                AS doc_fecha_emision,
         doc."FECHA_EXPIRACION"             AS doc_fecha_expiracion,
         doc."EMISOR"                       AS doc_emisor,
         td."TIPO"                          AS doc_tipo
       FROM public."USUARIO" u
-      LEFT JOIN public."PERSONA"           p   ON u."ID_PERSONA"    = p."ID_PERSONA"
-      LEFT JOIN public."UBICACION"         ub  ON p."ID_UBICACION"  = ub."ID_UBICACION"
-      LEFT JOIN public."TELEFONO"          t   ON p."ID_PERSONA"    = t."ID_PERSONA"
-                                              AND t."ESTADO_TELEFONO" = 'A'
-      LEFT JOIN public."DATOS_BIOGRAFICOS" db  ON p."ID_PERSONA"    = db."ID_PERSONA"
-      LEFT JOIN public."OCUPACION"         oc  ON db."ID_OCUPACION" = oc."ID_OCUPACION"
+      LEFT JOIN public."PERSONA"           p   ON u."ID_PERSONA"       = p."ID_PERSONA"
+      LEFT JOIN public."UBICACION"         ub  ON p."ID_UBICACION"     = ub."ID_UBICACION"
+      LEFT JOIN public."CIUDAD"            ci  ON ub."ID_CIUDAD"       = ci."ID_CIUDAD"
+      LEFT JOIN public."PAIS"              pa  ON ci."ID_PAIS"         = pa."ID_PAIS"
+      LEFT JOIN public."TELEFONO"          t   ON p."ID_PERSONA"       = t."ID_PERSONA"
+                                              AND t."ESTADO_TELEFONO"  = 'A'
+      LEFT JOIN public."DATOS_BIOGRAFICOS" db  ON p."ID_PERSONA"       = db."ID_PERSONA"
+      LEFT JOIN public."OCUPACION"         oc  ON db."ID_OCUPACION"    = oc."ID_OCUPACION"
       LEFT JOIN public."NACIONALIDAD"      na  ON db."ID_NACIONALIDAD" = na."ID_NACIONALIDAD"
       LEFT JOIN public."ESTADO_CIVIL"      ec  ON db."ID_ESTADO_CIVIL" = ec."ID_ESTADO_CIVIL"
-      LEFT JOIN public."CLIENTE"           cl  ON p."ID_PERSONA"    = cl."ID_CLIENTE"
-      LEFT JOIN public."MIEMBRO"           mi  ON cl."ID_CLIENTE"   = mi."ID_CLIENTE"
-      LEFT JOIN public."NIVEL_MEMBRESIA"   nm  ON mi."ID_NIVEL"     = nm."ID_NIVEL"
-      LEFT JOIN public."DOCUMENTACION"     doc ON p."ID_PERSONA"    = doc."ID_PERSONA"
-      LEFT JOIN public."TIPO_DOCUMENTACION" td ON doc."ID_TIPO"     = td."ID_TIPO"
+      LEFT JOIN public."CLIENTE"           cl  ON p."ID_PERSONA"       = cl."ID_CLIENTE"
+      LEFT JOIN public."MIEMBRO"           mi  ON cl."ID_CLIENTE"      = mi."ID_CLIENTE"
+      LEFT JOIN public."NIVEL_MEMBRESIA"   nm  ON mi."ID_NIVEL"        = nm."ID_NIVEL"
+      LEFT JOIN public."DOCUMENTACION"     doc ON p."ID_PERSONA"       = doc."ID_PERSONA"
+      LEFT JOIN public."TIPO_DOCUMENTACION" td ON doc."ID_TIPO"        = td."ID_TIPO"
       WHERE u."ID_USUARIO" = $1
       LIMIT 1`,
       [userId]
@@ -102,7 +100,6 @@ export const getProfile = async (req, res) => {
 
     const row = rows[0]
 
-    // Devolver estructura que espera el frontend Vue
     res.json({
       username:                   row.username,
       email:                      row.email,
@@ -113,7 +110,12 @@ export const getProfile = async (req, res) => {
       num_dhs_trip:               row.num_dhs_trip,
       contacto_emergencia_nombre: row.contacto_emergencia_nombre,
       contacto_emergencia_tel:    row.contacto_emergencia_tel,
+      id_ubicacion:               row.id_ubicacion,
       ubicacion_nombre:           row.ubicacion_nombre,
+      id_ciudad:                  row.id_ciudad,
+      ciudad_nombre:              row.ciudad_nombre,
+      id_pais:                    row.id_pais,
+      pais_nombre:                row.pais_nombre,
       telefono_numero:            row.telefono_numero,
       fecha_nacimiento:           row.fecha_nacimiento
         ? new Date(row.fecha_nacimiento).toISOString().split('T')[0]
@@ -144,23 +146,21 @@ export const getProfile = async (req, res) => {
     })
 
   } catch (error) {
-    console.error('❌ getProfile error:', error.message)
+    console.error('getProfile error:', error.message)
     res.status(500).json({ error: 'Error al consultar perfil' })
   }
 }
 
-// ─────────────────────────────────────────────
-// PUT /api/user/profile/update
-// ─────────────────────────────────────────────
+// PUT /api/perfil/profile/update
 export const updateProfile = async (req, res) => {
   const userId = req.user?.id
   const data   = req.body
-  console.log('✏️  updateProfile → userId:', userId, '| payload:', data)
+  console.log('updateProfile → userId:', userId, '| payload:', data)
 
   try {
     const pool = getPool()
 
-    // 1. Obtener ID_PERSONA del usuario
+    // 1. Obtener ID_PERSONA
     const { rows: userRows } = await pool.query(
       `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`,
       [userId]
@@ -170,8 +170,7 @@ export const updateProfile = async (req, res) => {
 
     const idPersona = userRows[0].ID_PERSONA
 
-    // ── PERSONA ──────────────────────────────────────────────────────────────
-    // Solo columnas que realmente existen en la tabla PERSONA del esquema
+    // 2. PERSONA
     const personaCols = {
       nombre_completo:            '"NOMBRE_COMPLETO"',
       apellidos:                  '"APELLIDOS"',
@@ -179,6 +178,7 @@ export const updateProfile = async (req, res) => {
       num_dhs_trip:               '"NUM_DHS_TRIP"',
       contacto_emergencia_nombre: '"CONTACTO_EMERGENCIA_NOMBRE"',
       contacto_emergencia_tel:    '"CONTACTO_EMERGENCIA_TEL"',
+      id_ubicacion:               '"ID_UBICACION"',
     }
 
     const personaFields = []
@@ -188,12 +188,11 @@ export const updateProfile = async (req, res) => {
     for (const [key, col] of Object.entries(personaCols)) {
       if (data[key] !== undefined) {
         personaFields.push(`${col} = $${idx++}`)
-        personaValues.push(data[key])
+        personaValues.push(data[key] || null)
       }
     }
 
     if (personaFields.length > 0) {
-      // Upsert: insertar si no existe, actualizar si existe
       const existsP = await pool.query(
         `SELECT "ID_PERSONA" FROM public."PERSONA" WHERE "ID_PERSONA" = $1`,
         [idPersona]
@@ -215,7 +214,7 @@ export const updateProfile = async (req, res) => {
       )
     }
 
-    // ── EMAIL en USUARIO ──────────────────────────────────────────────────────
+    // 3. EMAIL en USUARIO
     if (data.email !== undefined) {
       await pool.query(
         `UPDATE public."USUARIO" SET "CORREO_ELECTRONICO" = $1 WHERE "ID_USUARIO" = $2`,
@@ -223,7 +222,7 @@ export const updateProfile = async (req, res) => {
       )
     }
 
-    // ── CLIENTE.DESCRIPCION_PERSONAL ──────────────────────────────────────────
+    // 4. CLIENTE.DESCRIPCION_PERSONAL
     if (data.descripcion_personal !== undefined) {
       const existsCl = await pool.query(
         `SELECT "ID_CLIENTE" FROM public."CLIENTE" WHERE "ID_CLIENTE" = $1`,
@@ -239,10 +238,7 @@ export const updateProfile = async (req, res) => {
       }
     }
 
-    // ── DATOS_BIOGRAFICOS ────────────────────────────────────────────────────
-    // NOTA: OCUPACION, NACIONALIDAD y ESTADO_CIVIL son IDs foráneos.
-    // El frontend actualmente manda texto; si quieres resolverlos por nombre
-    // descomenta los bloques correspondientes abajo.
+    // 5. DATOS_BIOGRAFICOS
     const bioCols = {
       fecha_nacimiento: '"FECHA_NACIMIENTO"',
       genero:           '"TIPO_SEXO"',
@@ -262,7 +258,6 @@ export const updateProfile = async (req, res) => {
       }
     }
 
-    // Resolver OCUPACION por nombre → ID
     if (data.ocupacion !== undefined) {
       const { rows: ocRows } = await pool.query(
         `SELECT "ID_OCUPACION" FROM public."OCUPACION" WHERE "NOMBRE" ILIKE $1 LIMIT 1`,
@@ -274,7 +269,6 @@ export const updateProfile = async (req, res) => {
       }
     }
 
-    // Resolver NACIONALIDAD por nombre → ID
     if (data.nacionalidad !== undefined) {
       const { rows: naRows } = await pool.query(
         `SELECT "ID_NACIONALIDAD" FROM public."NACIONALIDAD" WHERE "NOMBRE_NACIONALIDAD" ILIKE $1 LIMIT 1`,
@@ -286,7 +280,6 @@ export const updateProfile = async (req, res) => {
       }
     }
 
-    // Resolver ESTADO_CIVIL por nombre → ID
     if (data.estado_civil !== undefined) {
       const { rows: ecRows } = await pool.query(
         `SELECT "ID_ESTADO_CIVIL" FROM public."ESTADO_CIVIL" WHERE "NOMBRE_ESTADO" ILIKE $1 LIMIT 1`,
@@ -303,11 +296,7 @@ export const updateProfile = async (req, res) => {
         `SELECT "ID_PERSONA" FROM public."DATOS_BIOGRAFICOS" WHERE "ID_PERSONA" = $1`,
         [idPersona]
       )
-      if (existsBio.rows.length === 0) {
-        // No insertamos si no existe — DATOS_BIOGRAFICOS tiene muchos NOT NULL
-        // que no podemos satisfacer desde el perfil básico
-        console.warn('⚠️  DATOS_BIOGRAFICOS no existe para ID_PERSONA', idPersona, '— update omitido')
-      } else {
+      if (existsBio.rows.length > 0) {
         bioValues.push(idPersona)
         await pool.query(
           `UPDATE public."DATOS_BIOGRAFICOS"
@@ -315,12 +304,12 @@ export const updateProfile = async (req, res) => {
            WHERE "ID_PERSONA" = $${idx}`,
           bioValues
         )
+      } else {
+        console.warn('DATOS_BIOGRAFICOS no existe para ID_PERSONA', idPersona)
       }
     }
 
-    // ── TELEFONO ─────────────────────────────────────────────────────────────
-    // TELEFONO es tabla separada: (ID_TELEFONO, CODIGO_PAIS, NUMERO_TELEFONICO,
-    //                               ESTADO_TELEFONO, ID_TIPO, ID_PERSONA)
+    // 6. TELEFONO
     if (data.telefono_numero !== undefined && idPersona) {
       const existsTel = await pool.query(
         `SELECT "ID_TELEFONO" FROM public."TELEFONO"
@@ -336,12 +325,9 @@ export const updateProfile = async (req, res) => {
           [data.telefono_numero, existsTel.rows[0].ID_TELEFONO]
         )
       }
-      // Si no existe teléfono activo no insertamos porque ID_TIPO y
-      // CODIGO_PAIS son NOT NULL y no los tenemos aquí.
     }
 
-    // ── DOCUMENTACION ────────────────────────────────────────────────────────
-    // Columna correcta: NUMERO_DOCUMENTACION (no NUMERO_DOCUMENTO)
+    // 7. DOCUMENTACION
     const hasDoc = data.numero_documento || data.fecha_emision ||
                    data.fecha_expiracion || data.emisor
 
@@ -352,7 +338,6 @@ export const updateProfile = async (req, res) => {
       )
 
       if (existsDoc.rows.length === 0) {
-        // Necesitamos ID_TIPO — tomamos el primero disponible como fallback
         const { rows: tipoRows } = await pool.query(
           `SELECT "ID_TIPO" FROM public."TIPO_DOCUMENTACION" LIMIT 1`
         )
@@ -377,10 +362,22 @@ export const updateProfile = async (req, res) => {
         const docValues = []
         idx = 1
 
-        if (data.numero_documento  !== undefined) { docFields.push(`"NUMERO_DOCUMENTACION" = $${idx++}`); docValues.push(data.numero_documento) }
-        if (data.fecha_emision     !== undefined) { docFields.push(`"FECHA_EMISION" = $${idx++}`);        docValues.push(data.fecha_emision || null) }
-        if (data.fecha_expiracion  !== undefined) { docFields.push(`"FECHA_EXPIRACION" = $${idx++}`);     docValues.push(data.fecha_expiracion || null) }
-        if (data.emisor            !== undefined) { docFields.push(`"EMISOR" = $${idx++}`);               docValues.push(data.emisor) }
+        if (data.numero_documento !== undefined) {
+          docFields.push(`"NUMERO_DOCUMENTACION" = $${idx++}`)
+          docValues.push(data.numero_documento)
+        }
+        if (data.fecha_emision !== undefined) {
+          docFields.push(`"FECHA_EMISION" = $${idx++}`)
+          docValues.push(data.fecha_emision || null)
+        }
+        if (data.fecha_expiracion !== undefined) {
+          docFields.push(`"FECHA_EXPIRACION" = $${idx++}`)
+          docValues.push(data.fecha_expiracion || null)
+        }
+        if (data.emisor !== undefined) {
+          docFields.push(`"EMISOR" = $${idx++}`)
+          docValues.push(data.emisor)
+        }
 
         if (docFields.length > 0) {
           docValues.push(idPersona)
@@ -394,11 +391,11 @@ export const updateProfile = async (req, res) => {
       }
     }
 
-    console.log('✅ Perfil actualizado — userId:', userId)
+    console.log('Perfil actualizado — userId:', userId)
     res.json({ message: 'Perfil actualizado correctamente', success: true })
 
   } catch (error) {
-    console.error('❌ updateProfile error:', error.message)
+    console.error('updateProfile error:', error.message)
     console.error(error)
     res.status(500).json({ error: 'Error al actualizar perfil', detail: error.message })
   }

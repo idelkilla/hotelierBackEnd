@@ -66,7 +66,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 // 5. QUINTO: Rutas de la API — ✅ CORRECT — all under /api/*
 app.use('/api/auth', authRoutes)
 app.use('/api/search', searchRoutes)
-app.use('/api/perfil', perfilRoutes)
+app.use('/api/perfil', perfilRoutes) 
 app.use('/api/catalogos', catalogosRouter)
 app.use('/api/hospedaje', hospedajeDetalleRoutes)
 app.use('/api/reservas', reservasRouter)

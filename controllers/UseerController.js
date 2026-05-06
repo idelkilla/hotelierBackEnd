@@ -153,7 +153,7 @@ export async function getProfile(req, res, next) {
 // PUT /api/perfil/profile/update
 // ─────────────────────────────────────────────────────────────────────────────
 export async function updateProfile(req, res, next) {
-  const client = await db.pool.connect()
+  const client = await db.connect()
   try {
     await client.query('BEGIN')
 
