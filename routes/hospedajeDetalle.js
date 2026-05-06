@@ -193,4 +193,36 @@ router.get('/:id/resenas', async (req, res) => {
   }
 })
 
+// POST /api/hospedaje/:id/resenas
+router.post('/:id/resenas', async (req, res) => {
+  const pool = getPool()
+  const { id } = req.params // id_servicio
+  const { calificacion, comentario, id_cliente } = req.body // id_cliente is optional, for now assume anonymous or a default client
+
+  // Basic validation
+  if (!calificacion || !comentario) {
+    return res.status(400).json({ error: 'Calificación y comentario son requeridos.' })
+  }
+  if (calificacion < 1 || calificacion > 5) {
+    return res.status(400).json({ error: 'La calificación debe ser entre 1 y 5.' })
+  }
+
+  try {
+    // For now, assume a default client ID if not provided, or handle anonymous reviews
+    // In a real app, you'd get id_cliente from session/auth
+    const clientId = id_cliente || null; // Replace with actual client ID logic
+
+    const { rows } = await pool.query(`
+      INSERT INTO "RESENA" ("ID_SERVICIO", "ID_CLIENTE", "CALIFICACION", "COMENTARIO", "FECHA_RESENA")
+      VALUES ($1, $2, $3, $4, NOW())
+      RETURNING "ID_RESENA", "FECHA_RESENA"
+    `, [id, clientId, calificacion, comentario])
+
+    res.status(201).json({ message: 'Reseña publicada con éxito', id: rows[0].ID_RESENA, fecha: rows[0].FECHA_RESENA })
+  } catch (e) {
+    console.error('❌ ERROR publicando reseña:', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 export default router
