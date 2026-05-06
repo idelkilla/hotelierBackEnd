@@ -97,6 +97,9 @@ router.post('/checkout', authenticateToken, async (req, res) => {
 
     // ── 2. Calcular montos ──────────────────────────────────
     const cantidadNoches = noches || calcularNoches(fecha_inicio, fecha_fin)
+    if (cantidadNoches === 0) {
+      return res.status(400).json({ message: 'Las fechas seleccionadas resultan en 0 noches.' })
+    }
     const subtotal       = precioNoche * cantidadNoches
     const montoImpuestos = parseFloat((subtotal * 0.18).toFixed(2))
     const montoCargos    = parseFloat((subtotal * 0.04).toFixed(2))
