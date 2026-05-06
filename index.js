@@ -18,6 +18,7 @@ import imagenesRouter from './routes/imagenes.js'
 import habitacionesRoutes from './routes/habitaciones.js'
 import filtrosRouter from './routes/filtros.js'
 import metodoPagoRouter from './routes/metodoPago.js'
+import favoritosRouter from './routes/favoritos.js'
 import errorHandler from './middleware/errorHandler.js'
 
 const app = express()
@@ -75,7 +76,7 @@ app.use('/api/dashboard', dashboardRouter)
 app.use('/api/habitaciones', habitacionesRoutes)
 app.use('/api/filtros', filtrosRouter)
 app.use('/api/metodos-pago', metodoPagoRouter)
-
+app.use('/api/favoritos', favoritosRouter)
 // ✅ CORRECTO - imagenes PRIMERO, hospedajes DESPUÉS
 app.use('/api/imagenes', imagenesRouter)
 
