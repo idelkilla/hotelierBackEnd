@@ -50,7 +50,8 @@ router.get('/', authenticateToken, async (req, res) => {
       LEFT JOIN "HABITACION"    hab ON hab."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
       WHERE f."ID_CLIENTE" = $1
       GROUP BY h."ID_HOSPEDAJE", u."NOMBRE", ci."NOMBRE",
-               pa."NOMBRE", h."DESCRIPCION", img."URL", th."NOMBRE_TIPO"
+               pa."NOMBRE", h."DESCRIPCION", img."URL", th."NOMBRE_TIPO",
+               f."FECHA_GUARDADO"
       ORDER BY f."FECHA_GUARDADO" DESC
     `, [idCliente])
 
