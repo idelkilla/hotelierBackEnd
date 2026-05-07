@@ -34,14 +34,10 @@ router.get('/admin/todas', authenticateToken, async (req, res) => {
     const pool = getPool()
     const { rows } = await pool.query(
       `SELECT
-         r."ID_RESERVA",
-         r."FECHA_INICIO",
-         r."FECHA_FIN",
+         r."ID_RESERVA"          AS id_reserva,
+         r."FECHA_INICIO"        AS fecha_inicio,
+         r."FECHA_FIN"           AS fecha_fin,
          r."ID_ESTADO",
-         r."ID_CLIENTE",
-         r."ID_EMPLEADO",
-         r."ID_ORIGEN",
-         r."ID_DESTINO",
          er."ESTADO"          AS estado_nombre,
          p."NOMBRE_COMPLETO"  AS cliente_nombre,
          uo."NOMBRE"          AS origen_nombre,
