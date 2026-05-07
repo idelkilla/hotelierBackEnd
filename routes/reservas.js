@@ -73,11 +73,11 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       [req.user.id]
     )
 
-    if (!userRows.length || !userRows[0].ID_PERSONA) {
+    if (!userRows.length || !userRows[0].id_persona) {
       return res.status(401).json({ message: 'Usuario no autenticado como cliente.' })
     }
 
-    const idCliente = userRows[0].ID_PERSONA
+    const idCliente = userRows[0].id_persona
 
     await client.query('BEGIN')
 
@@ -93,7 +93,7 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Habitación no encontrada.' })
     }
     const habitacion = habRows[0]
-    const precioNoche = parseFloat(habitacion.PRECIO_NOCHE)
+    const precioNoche = parseFloat(habitacion.precio_noche)
 
     // ── 2. Calcular montos ──────────────────────────────────
     const cantidadNoches = noches || calcularNoches(fecha_inicio, fecha_fin)
@@ -119,8 +119,8 @@ router.post('/checkout', authenticateToken, async (req, res) => {
         [proteccion.id_plan]
       )
       if (planRows.length) {
-        idPlanProteccion = planRows[0].ID_PLAN
-        costoProteccion  = parseFloat(planRows[0].PRECIO_POR_PERSONA)
+        idPlanProteccion = planRows[0].id_plan
+        costoProteccion  = parseFloat(planRows[0].precio_por_persona)
       }
     }
 
@@ -136,15 +136,15 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       `SELECT ho."ID_UBICACION"
        FROM "HOSPEDAJE" ho
        WHERE ho."ID_HOSPEDAJE" = $1`,
-      [habitacion.ID_HOSPEDAJE]
+      [habitacion.id_hospedaje]
     )
-    const idUbicacion = ubicRows[0]?.ID_UBICACION ?? 1
+    const idUbicacion = ubicRows[0]?.id_ubicacion ?? 1
 
     // ── 4. Obtener el ID_EMPLEADO de soporte (empleado por defecto) ─
     const { rows: empRows } = await client.query(
       `SELECT "ID_EMPLEADO" FROM "EMPLEADO" LIMIT 1`
     )
-    const idEmpleado = empRows[0]?.ID_EMPLEADO
+    const idEmpleado = empRows[0]?.id_empleado
     if (!idEmpleado) {
       await client.query('ROLLBACK')
       return res.status(500).json({ message: 'No hay empleados registrados en el sistema.' })
@@ -156,7 +156,7 @@ router.post('/checkout', authenticateToken, async (req, res) => {
        WHERE LOWER("ESTADO") IN ('confirmada', 'confirmado')
        LIMIT 1`
     )
-    const idEstado = estadoRows[0]?.ID_ESTADO ?? 1
+    const idEstado = estadoRows[0]?.id_estado ?? 1
 
     // ── 6. Obtener ID_ORIGEN del cliente (ubicación personal) ─
     const { rows: personaRows } = await client.query(
@@ -166,7 +166,7 @@ router.post('/checkout', authenticateToken, async (req, res) => {
        WHERE u."ID_USUARIO" = $1`,
       [req.user.id]
     )
-    const idOrigen  = personaRows[0]?.ID_UBICACION ?? idUbicacion
+    const idOrigen  = personaRows[0]?.id_ubicacion ?? idUbicacion
     const idDestino = idUbicacion
 
     // ── 7. Insertar RESERVA principal ───────────────────────
@@ -211,7 +211,7 @@ router.post('/checkout', authenticateToken, async (req, res) => {
         id_habitacion,
       ]
     )
-    const idDetalle = detalleRows[0].ID_DETALLE
+    const idDetalle = detalleRows[0].id_detalle
 
     // ── 9. Insertar HUESPED_RESERVA ─────────────────────────
     await client.query(
@@ -247,7 +247,7 @@ router.post('/checkout', authenticateToken, async (req, res) => {
            RETURNING "ID_METODO"`,
           [ultimos4, t.nombre_titular, t.mes_exp, t.ano_exp, t.codigo_postal, req.user.id]
         )
-        idMetodoPago = metRows[0]?.ID_METODO ?? null
+        idMetodoPago = metRows[0]?.id_metodo ?? null
       } else {
         // Registro temporal (no guardada) para trazabilidad
         const { rows: metRows } = await client.query(
@@ -261,7 +261,7 @@ router.post('/checkout', authenticateToken, async (req, res) => {
            RETURNING "ID_METODO"`,
           [ultimos4, t.nombre_titular, t.mes_exp, t.ano_exp, t.codigo_postal, req.user.id]
         )
-        idMetodoPago = metRows[0]?.ID_METODO ?? null
+        idMetodoPago = metRows[0]?.id_metodo ?? null
       }
     } else if (['paypal', 'affirm', 'applepay'].includes(pago.metodo)) {
       // Métodos alternativos: sin datos de tarjeta
@@ -275,7 +275,7 @@ router.post('/checkout', authenticateToken, async (req, res) => {
          RETURNING "ID_METODO"`,
         [pago.metodo, req.user.id]
       )
-      idMetodoPago = metRows[0]?.ID_METODO ?? null
+      idMetodoPago = metRows[0]?.id_metodo ?? null
     }
 
     // ── 11. Vincular método de pago al detalle ──────────────
@@ -356,11 +356,11 @@ router.get('/mis-reservas', authenticateToken, async (req, res) => {
       [req.user.id]
     )
 
-    if (!userRows.length || !userRows[0]?.ID_PERSONA) {
+    if (!userRows.length || !userRows[0]?.id_persona) {
       return res.status(401).json({ message: 'No autenticado como cliente.' })
     }
 
-    const idCliente = userRows[0].ID_PERSONA
+    const idCliente = userRows[0].id_persona
 
     const { rows } = await pool.query(
       `SELECT
@@ -416,10 +416,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
       [req.user.id]
     )
 
-    if (!userRows.length || !userRows[0]?.ID_PERSONA) {
+    if (!userRows.length || !userRows[0]?.id_persona) {
       return res.status(401).json({ message: 'No autenticado como cliente.' })
     }
-    const idCliente = userRows[0]?.ID_PERSONA
+    const idCliente = userRows[0]?.id_persona
 
     const { rows } = await pool.query(
       `SELECT
@@ -487,10 +487,10 @@ router.delete('/:id/cancelar', authenticateToken, async (req, res) => {
       `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`,
       [req.user.id]
     )
-    if (!userRows.length || !userRows[0].ID_PERSONA) {
+    if (!userRows.length || !userRows[0].id_persona) {
       return res.status(401).json({ message: 'No autenticado como cliente.' })
     }
-    const idCliente = userRows[0].ID_PERSONA
+    const idCliente = userRows[0].id_persona
 
     await client.query('BEGIN')
 
@@ -511,7 +511,7 @@ router.delete('/:id/cancelar', authenticateToken, async (req, res) => {
     const reserva = rows[0]
     const hoy     = new Date().toISOString().split('T')[0]
 
-    if (reserva.FECHA_LIMITE_CANCELACION && reserva.FECHA_LIMITE_CANCELACION < hoy) {
+    if (reserva.fecha_limite_cancelacion && reserva.fecha_limite_cancelacion < hoy) {
       await client.query('ROLLBACK')
       return res.status(400).json({
         message: 'El período de cancelación gratuita ha vencido.',
@@ -523,7 +523,7 @@ router.delete('/:id/cancelar', authenticateToken, async (req, res) => {
       `SELECT "ID_ESTADO" FROM "ESTADO_RESERVA"
        WHERE LOWER("ESTADO") IN ('cancelada', 'cancelado') LIMIT 1`
     )
-    const idEstadoCancelada = estadoRows[0]?.ID_ESTADO
+    const idEstadoCancelada = estadoRows[0]?.id_estado
     if (!idEstadoCancelada) {
       await client.query('ROLLBACK')
       return res.status(500).json({ message: 'Estado "Cancelada" no configurado.' })
@@ -541,7 +541,7 @@ router.delete('/:id/cancelar', authenticateToken, async (req, res) => {
        WHERE "ID_HABITACION" = $1
          AND "FECHA" >= $2::date
          AND "FECHA" < $3::date`,
-      [reserva.ID_HABITACION, reserva.FECHA_INICIO, reserva.FECHA_FIN]
+      [reserva.id_habitacion, reserva.fecha_inicio, reserva.fecha_fin]
     )
 
     await client.query('COMMIT')
