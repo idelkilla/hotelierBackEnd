@@ -111,25 +111,34 @@ router.get('/resenas', async (req, res, next) => {
 
     res.json(rows)
   } catch (err) { next(err) }
-  router.get('/resenas', async (req, res, next) => {
+ router.get('/resenas', async (req, res, next) => {
   try {
     const idPersona = req.user.id_persona || req.user.ID_PERSONA
-    console.log('🔍 req.user completo:', req.user)
-    console.log('🔍 idPersona resenas:', idPersona)
+    console.log('🔍 idPersona:', idPersona)
+
+    // Primero buscar el ID_CLIENTE que corresponde a esta persona
+    const { rows: clienteRows } = await db.query(
+      `SELECT "ID_CLIENTE" FROM "CLIENTE" WHERE "ID_CLIENTE" = $1`, [idPersona]
+    )
+    console.log('🔍 cliente encontrado:', clienteRows)
+
+    if (!clienteRows.length) return res.json([])
+
+    const idCliente = clienteRows[0].ID_CLIENTE
 
     const { rows } = await db.query(`
       SELECT
         r."ID_RESENA"    AS id,
         r."COMENTARIO"   AS texto,
         r."CALIFICACION" AS estrellas,
-        s."NOMBRE"       AS titulo,
-        TO_CHAR(r."ID_RESENA", 'FM999999') AS fecha
+        s."NOMBRE"       AS titulo
       FROM "RESENA" r
       JOIN "SERVICIO" s ON s."ID_SERVICIO" = r."ID_SERVICIO"
       WHERE r."ID_CLIENTE" = $1
       ORDER BY r."ID_RESENA" DESC
-    `, [idPersona])
+    `, [idCliente])
 
+    console.log('🔍 reseñas encontradas:', rows.length)
     res.json(rows)
   } catch (err) { next(err) }
 })
