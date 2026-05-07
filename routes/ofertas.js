@@ -8,24 +8,24 @@ router.get('/ofertas-finde', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT
-        h."ID_HOSPEDAJE"                                    AS id,
-        pr."NOMBRE_LEGAL"                                   AS nombre,
-        u."NOMBRE"                                          AS ubicacion,
+        h."ID_HOSPEDAJE"                                      AS id,
+        th."NOMBRE_TIPO"                                      AS nombre,
+        u."NOMBRE"                                            AS ubicacion,
         h."CANCELACION",
-        MIN(hab."PRECIO_NOCHE")::numeric(10,2)              AS precio_noche_original,
-        MIN(d."PRECIO_AJUSTADO")::numeric(10,2)             AS precio_noche_oferta,
+        MIN(hab."PRECIO_NOCHE")::numeric(10,2)                AS precio_noche_original,
+        MIN(d."PRECIO_AJUSTADO")::numeric(10,2)               AS precio_noche_oferta,
         ROUND((1 - MIN(d."PRECIO_AJUSTADO") / MIN(hab."PRECIO_NOCHE")) * 100)
-                                                            AS descuento_pct,
+                                                              AS descuento_pct,
         ROUND(MIN(hab."PRECIO_NOCHE") - MIN(d."PRECIO_AJUSTADO"))
-                                                            AS ahorro_noche,
+                                                              AS ahorro_noche,
         JSON_AGG(
           DISTINCT JSONB_BUILD_OBJECT('url', img."URL", 'alt', COALESCE(img."ALT_TEXT",''))
-        ) FILTER (WHERE img."ID_IMAGEN" IS NOT NULL)        AS imagenes
+        ) FILTER (WHERE img."ID_IMAGEN" IS NOT NULL)          AS imagenes
       FROM "DISPONIBILIDAD" d
-      JOIN "HABITACION"    hab ON hab."ID_HABITACION" = d."ID_HABITACION"
-      JOIN "HOSPEDAJE"     h   ON h."ID_HOSPEDAJE"   = hab."ID_HOSPEDAJE"
-      JOIN "UBICACION"     u   ON u."ID_UBICACION"   = h."ID_UBICACION"
-      JOIN "PROVEEDOR"     pr  ON pr."ID_PROVEEDOR"  = h."ID_HOSPEDAJE"
+      JOIN "HABITACION"     hab ON hab."ID_HABITACION"  = d."ID_HABITACION"
+      JOIN "HOSPEDAJE"      h   ON h."ID_HOSPEDAJE"     = hab."ID_HOSPEDAJE"
+      JOIN "UBICACION"      u   ON u."ID_UBICACION"     = h."ID_UBICACION"
+      JOIN "TIPO_HOSPEDAJE" th  ON th."ID_TIPO"         = h."ID_TIPO"
       LEFT JOIN "IMAGEN_HOSPEDAJE" img ON img."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
       WHERE
         d."FECHA" BETWEEN
@@ -35,7 +35,7 @@ router.get('/ofertas-finde', async (req, res) => {
         AND d."ESTADO" = 'A'
         AND d."PRECIO_AJUSTADO" IS NOT NULL
         AND d."PRECIO_AJUSTADO" <= hab."PRECIO_NOCHE" * 0.80
-      GROUP BY h."ID_HOSPEDAJE", pr."NOMBRE_LEGAL", u."NOMBRE",
+      GROUP BY h."ID_HOSPEDAJE", th."NOMBRE_TIPO", u."NOMBRE",
                h."DESCRIPCION", h."CANCELACION"
       ORDER BY descuento_pct DESC
       LIMIT 8
