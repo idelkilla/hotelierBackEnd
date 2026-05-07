@@ -236,31 +236,29 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
   } = req.body
 
   try {
-    // 1. Actualizar USUARIO + PERSONA
+    // 1. Actualizar USUARIO
     await db.query(`
       UPDATE public."USUARIO"
       SET "CORREO_ELECTRONICO" = $1, "USUARIO" = $2
       WHERE "ID_USUARIO" = $3
     `, [correo, usuario, id])
 
-    // Obtener ID_PERSONA
+    // 2. Obtener ID_PERSONA
     const { rows: [u] } = await db.query(
       `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`, [id]
     )
     if (!u?.ID_PERSONA) return res.status(404).json({ message: 'Usuario no encontrado' })
     const idPersona = u.ID_PERSONA
 
-    // Actualizar PERSONA
-    if (nombre_completo || apellidos) {
-      await db.query(`
-        UPDATE public."PERSONA"
-        SET "NOMBRE_COMPLETO" = COALESCE($1, "NOMBRE_COMPLETO"),
-            "APELLIDOS" = COALESCE($2, "APELLIDOS")
-        WHERE "ID_PERSONA" = $3
-      `, [nombre_completo, apellidos, idPersona])
-    }
+    // 3. Actualizar PERSONA
+    await db.query(`
+      UPDATE public."PERSONA"
+      SET "NOMBRE_COMPLETO" = COALESCE($1, "NOMBRE_COMPLETO"),
+          "APELLIDOS"       = COALESCE($2, "APELLIDOS")
+      WHERE "ID_PERSONA" = $3
+    `, [nombre_completo || null, apellidos || null, idPersona])
 
-    // 2. Contraseña (opcional)
+    // 4. Contraseña
     if (contrasena) {
       const hash = await bcrypt.hash(contrasena, 10)
       await db.query(
@@ -269,17 +267,29 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
       )
     }
 
-    // 3. Teléfono
+    // 5. Teléfono
     if (numero_telefonico) {
-      await db.query(`
+      const { rowCount } = await db.query(`
         UPDATE public."TELEFONO"
         SET "NUMERO_TELEFONICO" = $1, "CODIGO_PAIS" = $2
         WHERE "ID_PERSONA" = $3 AND "ESTADO_TELEFONO" = 'A'
       `, [numero_telefonico, codigo_pais || '+1', idPersona])
+
+      // Si no tenía teléfono, insertar
+      if (rowCount === 0) {
+        const { rows: tipoTel } = await db.query(
+          `SELECT "ID_TIPO" FROM public."TIPO_TELEFONO" LIMIT 1`
+        )
+        await db.query(`
+          INSERT INTO public."TELEFONO"
+            ("CODIGO_PAIS", "NUMERO_TELEFONICO", "ESTADO_TELEFONO", "ID_TIPO", "ID_PERSONA")
+          VALUES ($1, $2, 'A', $3, $4)
+        `, [codigo_pais || '+1', numero_telefonico, tipoTel[0]?.ID_TIPO ?? 1, idPersona])
+      }
     }
 
-    // 4. Cambio de tipo — insertar en tabla destino si no existe
-    const tipoActual = await db.query(`
+    // 6. Detectar tipo actual en BD
+    const { rows: [rolRow] } = await db.query(`
       SELECT
         CASE
           WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'miembro'
@@ -294,12 +304,30 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
       WHERE u."ID_USUARIO" = $1
     `, [id])
 
-    const tipoAnterior = tipoActual.rows[0]?.tipo_actual
-    const t = tipo?.toLowerCase()
+    const tipoActual  = rolRow?.tipo_actual
+    const tipoNuevo   = tipo?.toLowerCase()
 
-    if (t && t !== tipoAnterior) {
-      // Insertar en tabla destino si no existe
-      if (t === 'empleado') {
+    // 7. Cambio de tipo — remover rol anterior e insertar nuevo
+    if (tipoNuevo && tipoNuevo !== tipoActual) {
+      // Eliminar rol anterior
+      if (tipoActual === 'empleado') {
+        await db.query(
+          `DELETE FROM public."EMPLEADO" WHERE "ID_EMPLEADO" = $1`, [idPersona]
+        )
+      }
+      if (tipoActual === 'miembro') {
+        await db.query(
+          `DELETE FROM public."MIEMBRO" WHERE "ID_CLIENTE" = $1`, [idPersona]
+        )
+      }
+      if (tipoActual === 'cliente' && tipoNuevo !== 'miembro') {
+        await db.query(
+          `DELETE FROM public."CLIENTE" WHERE "ID_CLIENTE" = $1`, [idPersona]
+        )
+      }
+
+      // Insertar nuevo rol
+      if (tipoNuevo === 'empleado') {
         await db.query(`
           INSERT INTO public."EMPLEADO" ("ID_EMPLEADO", "FECHA_CONTRATACION")
           VALUES ($1, CURRENT_DATE)
@@ -307,55 +335,66 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
         `, [idPersona])
       }
 
-      if (t === 'cliente' || t === 'miembro') {
+      if (tipoNuevo === 'cliente' || tipoNuevo === 'miembro') {
         await db.query(`
-          INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE", "FECHA_REGISTRO")
+          INSERT INTO public."CLIENTE"
+            ("ID_CLIENTE", "ESTADO_CLIENTE", "FECHA_REGISTRO")
           VALUES ($1, 'A', CURRENT_DATE)
           ON CONFLICT DO NOTHING
         `, [idPersona])
       }
 
-      if (t === 'miembro') {
-        // Generar número de miembro
+      if (tipoNuevo === 'miembro') {
         const { rows: maxRows } = await db.query(
           `SELECT COALESCE(MAX(CAST(SUBSTRING("NUMERO_MIEMBRO" FROM 4) AS INTEGER)), 0) + 1 AS next
            FROM public."MIEMBRO"`
         )
         const numMiembro = `MEM${String(maxRows[0].next).padStart(6, '0')}`
         await db.query(`
-          INSERT INTO public."MIEMBRO" ("ID_CLIENTE", "NUMERO_MIEMBRO", "FECHA_INICIO", "PUNTOS_FIDELIDAD")
+          INSERT INTO public."MIEMBRO"
+            ("ID_CLIENTE", "NUMERO_MIEMBRO", "FECHA_INICIO", "PUNTOS_FIDELIDAD")
           VALUES ($1, $2, CURRENT_DATE, 0)
           ON CONFLICT DO NOTHING
         `, [idPersona, numMiembro])
       }
     }
 
-    // 5. Datos específicos por tipo
+    // 8. Actualizar datos específicos del tipo actual (o nuevo)
+    const tipoFinal = tipoNuevo || tipoActual
 
-    if (t === 'empleado' && id_puesto) {
-      await db.query(`
+    if (tipoFinal === 'empleado' && id_puesto) {
+      const { rowCount } = await db.query(`
         UPDATE public."EMPLEADO_PUESTO"
         SET "ID_PUESTO" = $1, "SUELDO" = COALESCE($2, "SUELDO")
         WHERE "ID_EMPLEADO" = $3 AND "FECHA_FIN" >= CURRENT_DATE
       `, [id_puesto, sueldo, idPersona])
+
+      if (rowCount === 0) {
+        await db.query(`
+          INSERT INTO public."EMPLEADO_PUESTO"
+            ("FECHA_INICIO", "FECHA_FIN", "SUELDO", "ID_PUESTO", "ID_EMPLEADO")
+          VALUES (CURRENT_DATE, '2099-12-31', $1, $2, $3)
+        `, [sueldo || 0, id_puesto, idPersona])
+      }
     }
 
-    if ((t === 'cliente' || t === 'miembro') && (genero || estado_cliente)) {
+    if (tipoFinal === 'cliente' || tipoFinal === 'miembro') {
       await db.query(`
         UPDATE public."CLIENTE"
-        SET "GENERO" = COALESCE($1, "GENERO"),
-            "ESTADO_CLIENTE" = COALESCE($2, "ESTADO_CLIENTE"),
-            "DESCRIPCION_PERSONAL" = COALESCE($3, "DESCRIPCION_PERSONAL")
+        SET "GENERO"               = $1,
+            "ESTADO_CLIENTE"       = $2,
+            "DESCRIPCION_PERSONAL" = $3
         WHERE "ID_CLIENTE" = $4
-      `, [genero, estado_cliente, descripcion_personal, idPersona])
+      `, [genero || null, estado_cliente || 'A', descripcion_personal || null, idPersona])
     }
 
-    if (t === 'miembro' && id_nivel) {
+    if (tipoFinal === 'miembro' && id_nivel) {
       await db.query(`
         UPDATE public."MIEMBRO"
-        SET "ID_NIVEL" = $1, "PUNTOS_FIDELIDAD" = COALESCE($2, "PUNTOS_FIDELIDAD")
+        SET "ID_NIVEL"         = $1,
+            "PUNTOS_FIDELIDAD" = $2
         WHERE "ID_CLIENTE" = $3
-      `, [id_nivel, puntos_fidelidad, idPersona])
+      `, [id_nivel, puntos_fidelidad ?? 0, idPersona])
     }
 
     res.json({ message: 'Usuario actualizado correctamente' })
