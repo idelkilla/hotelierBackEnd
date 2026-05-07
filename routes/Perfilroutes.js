@@ -114,5 +114,38 @@ router.get('/resenas', async (req, res, next) => {
     res.json(rows)
   } catch (err) { next(err) }
 })
+// ── POST crear reseña ─────────────────────────────────────────
+router.post('/resenas', async (req, res, next) => {
+  try {
+    const idPersona = req.user.id_persona || req.user.ID_PERSONA
+    const { titulo, texto, estrellas } = req.body
 
+    if (!texto?.trim() || !estrellas) {
+      return res.status(400).json({ error: 'Comentario y calificación son requeridos.' })
+    }
+
+    // Verificar que exista como CLIENTE, si no crearlo
+    const { rows: cliente } = await db.query(
+      `SELECT 1 FROM "CLIENTE" WHERE "ID_CLIENTE" = $1`, [idPersona]
+    )
+    if (!cliente.length) {
+      await db.query(`
+        INSERT INTO "CLIENTE" ("ID_CLIENTE","ESTADO_CLIENTE","FECHA_REGISTRO")
+        VALUES ($1, 'A', CURRENT_DATE)
+      `, [idPersona])
+    }
+
+    const { rows } = await db.query(`
+      INSERT INTO "RESENA" ("COMENTARIO", "CALIFICACION", "ID_CLIENTE", "ID_SERVICIO")
+      VALUES ($1, $2, $3, 1)
+      RETURNING "ID_RESENA" AS id, "COMENTARIO" AS texto, "CALIFICACION" AS estrellas
+    `, [texto.trim(), estrellas, idPersona])
+
+    res.status(201).json({
+      ...rows[0],
+      titulo: titulo || 'Mi reseña',
+      fecha:  new Date().toLocaleDateString('es-DO')
+    })
+  } catch (err) { next(err) }
+})
 export default router
