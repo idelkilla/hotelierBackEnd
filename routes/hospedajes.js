@@ -77,11 +77,52 @@ router.get('/habitaciones-count', async (_req, res, next) => {
 })
 
 /**
- * GET /api/hospedajes/:id
- * Detalle completo para el panel de edición
+ * GET /api/hospedajes/ofertas-finde
  */
-router.get('/:id', async (req, res, next) => {
-  const { id } = req.params
+router.get('/ofertas-finde', async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT
+        h."ID_HOSPEDAJE"                                      AS id,
+        pr."NOMBRE_LEGAL"                                     AS nombre,
+        u."NOMBRE"                                            AS ubicacion,
+        h."CANCELACION",
+        MIN(hab."PRECIO_NOCHE")::numeric(10,2)                AS precio_noche_original,
+        MIN(d."PRECIO_AJUSTADO")::numeric(10,2)               AS precio_noche_oferta,
+        ROUND((1 - MIN(d."PRECIO_AJUSTADO") / MIN(hab."PRECIO_NOCHE")) * 100)
+                                                              AS descuento_pct,
+        ROUND(MIN(hab."PRECIO_NOCHE") - MIN(d."PRECIO_AJUSTADO"))
+                                                              AS ahorro_noche,
+        JSON_AGG(
+          DISTINCT JSONB_BUILD_OBJECT('url', img."URL", 'alt', COALESCE(img."ALT_TEXT",''))
+        ) FILTER (WHERE img."ID_IMAGEN" IS NOT NULL)          AS imagenes
+      FROM "DISPONIBILIDAD" d
+      JOIN "HABITACION"    hab ON hab."ID_HABITACION" = d."ID_HABITACION"
+      JOIN "HOSPEDAJE"     h   ON h."ID_HOSPEDAJE"   = hab."ID_HOSPEDAJE"
+      JOIN "UBICACION"     u   ON u."ID_UBICACION"   = h."ID_UBICACION"
+      JOIN "PROVEEDOR"     pr  ON pr."ID_PROVEEDOR"  = h."ID_HOSPEDAJE"
+      LEFT JOIN "IMAGEN_HOSPEDAJE" img ON img."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
+      WHERE
+        d."FECHA" BETWEEN
+          DATE_TRUNC('week', CURRENT_DATE) + INTERVAL '5 days'
+          AND DATE_TRUNC('week', CURRENT_DATE) + INTERVAL '6 days'
+        AND d."CANTIDAD_DISPONIBLE" > 0
+        AND d."ESTADO" = 'A'
+        AND d."PRECIO_AJUSTADO" IS NOT NULL
+        AND d."PRECIO_AJUSTADO" <= hab."PRECIO_NOCHE" * 0.80
+      GROUP BY h."ID_HOSPEDAJE", pr."NOMBRE_LEGAL", u."NOMBRE",
+               h."DESCRIPCION", h."CANCELACION"
+      ORDER BY descuento_pct DESC
+      LIMIT 8
+    `)
+    res.json(rows)
+  } catch (err) {
+    console.error('❌ ofertas-finde:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+/**
   try {
     const { rows: h } = await db.query(`
       SELECT s."NOMBRE", h.*, u."NOMBRE" AS "NOMBRE_UBICACION", u."LATITUD", u."LONGITUD", c."ID_PAIS"
@@ -198,45 +239,6 @@ router.delete('/habitaciones-edit/:id', async (req, res, next) => {
       [req.params.id]
     )
     res.json({ message: 'Habitación eliminada' })
-  } catch (err) { next(err) }
-})
-
-/**
- * PUT /api/hospedajes/:id
- * Actualización de datos básicos y ubicación
- */
-router.put('/:id', async (req, res, next) => {
-  const { id } = req.params
-  const data = req.body
-  const client = await db.getPool().connect()
-  try {
-    await client.query('BEGIN')
-    await client.query('UPDATE public."SERVICIO" SET "NOMBRE" = $1 WHERE "ID_SERVICIO" = $2', [data.nombre, id])
-    await client.query(`
-      UPDATE public."HOSPEDAJE" 
-      SET "DESCRIPCION" = $1, "CHECKIN" = $2, "CHECKOUT" = $3, "CANCELACION" = $4, "MASCOTAS" = $5, "FUMAR" = $6, "ID_TIPO" = $7
-      WHERE "ID_HOSPEDAJE" = $8`, 
-      [data.descripcion, data.checkin, data.checkout, data.cancelacion, data.mascotas, data.fumar, data.id_tipo_hospedaje, id])
-    
-    if (data.ubicacion) {
-      const { rows: h } = await client.query('SELECT "ID_UBICACION" FROM public."HOSPEDAJE" WHERE "ID_HOSPEDAJE" = $1', [id])
-      await client.query(`
-        UPDATE public."UBICACION" SET "NOMBRE" = $1, "LATITUD" = $2, "LONGITUD" = $3, "ID_CIUDAD" = $4
-        WHERE "ID_UBICACION" = $5`, [data.ubicacion.nombre, data.ubicacion.latitud, data.ubicacion.longitud, data.ubicacion.id_ciudad, h[0].ID_UBICACION])
-    }
-    await client.query('COMMIT')
-    res.json({ message: 'Actualizado' })
-  } catch (err) { await client.query('ROLLBACK'); next(err) }
-  finally { client.release() }
-})
-
-/**
- * DELETE /api/hospedajes/:id
- */
-router.delete('/:id', async (req, res, next) => {
-  try {
-    await db.query('DELETE FROM public."SERVICIO" WHERE "ID_SERVICIO" = $1', [req.params.id])
-    res.json({ message: 'Eliminado' })
   } catch (err) { next(err) }
 })
 
@@ -413,6 +415,73 @@ router.post('/', async (req, res, next) => {
   } finally {
     client.release()
   }
+})
+
+/**
+ * PUT /api/hospedajes/:id
+ * Actualización de datos básicos y ubicación
+ */
+router.put('/:id', async (req, res, next) => {
+  const { id } = req.params
+  const data = req.body
+  const client = await db.getPool().connect()
+  try {
+    await client.query('BEGIN')
+    await client.query('UPDATE public."SERVICIO" SET "NOMBRE" = $1 WHERE "ID_SERVICIO" = $2', [data.nombre, id])
+    await client.query(`
+      UPDATE public."HOSPEDAJE" 
+      SET "DESCRIPCION" = $1, "CHECKIN" = $2, "CHECKOUT" = $3, "CANCELACION" = $4, "MASCOTAS" = $5, "FUMAR" = $6, "ID_TIPO" = $7
+      WHERE "ID_HOSPEDAJE" = $8`, 
+      [data.descripcion, data.checkin, data.checkout, data.cancelacion, data.mascotas, data.fumar, data.id_tipo_hospedaje, id])
+    
+    if (data.ubicacion) {
+      const { rows: h } = await client.query('SELECT "ID_UBICACION" FROM public."HOSPEDAJE" WHERE "ID_HOSPEDAJE" = $1', [id])
+      await client.query(`
+        UPDATE public."UBICACION" SET "NOMBRE" = $1, "LATITUD" = $2, "LONGITUD" = $3, "ID_CIUDAD" = $4
+        WHERE "ID_UBICACION" = $5`, [data.ubicacion.nombre, data.ubicacion.latitud, data.ubicacion.longitud, data.ubicacion.id_ciudad, h[0].ID_UBICACION])
+    }
+    await client.query('COMMIT')
+    res.json({ message: 'Actualizado' })
+  } catch (err) { await client.query('ROLLBACK'); next(err) }
+  finally { client.release() }
+})
+
+/**
+ * DELETE /api/hospedajes/:id
+ */
+router.delete('/:id', async (req, res, next) => {
+  try {
+    await db.query('DELETE FROM public."SERVICIO" WHERE "ID_SERVICIO" = $1', [req.params.id])
+    res.json({ message: 'Eliminado' })
+  } catch (err) { next(err) }
+})
+
+/**
+ * GET /api/hospedajes/:id
+ * Detalle completo para el panel de edición
+ */
+router.get('/:id', async (req, res, next) => {
+  const { id } = req.params
+  try {
+    const { rows: h } = await db.query(`
+      SELECT s."NOMBRE", h.*, u."NOMBRE" AS "NOMBRE_UBICACION", u."LATITUD", u."LONGITUD", c."ID_PAIS"
+      FROM public."HOSPEDAJE" h
+      JOIN public."SERVICIO" s ON s."ID_SERVICIO" = h."ID_HOSPEDAJE"
+      JOIN public."UBICACION" u ON u."ID_UBICACION" = h."ID_UBICACION"
+      JOIN public."CIUDAD" c ON c."ID_CIUDAD" = u."ID_CIUDAD"
+      WHERE h."ID_HOSPEDAJE" = $1`, [id])
+    
+    if (!h.length) return res.status(404).json({ message: 'No encontrado' })
+
+    const { rows: habs } = await db.query('SELECT * FROM public."HABITACION" WHERE "ID_HOSPEDAJE" = $1', [id])
+    const { rows: amens } = await db.query('SELECT "ID_SERVICIO_INCLUIDO" FROM public."HOSPEDAJE_SERVICIO" WHERE "ID_HOSPEDAJE" = $1', [id])
+    
+    res.json({
+      ...h[0],
+      habitaciones: habs,
+      amenidades: amens
+    })
+  } catch (err) { next(err) }
 })
 
 export default router
