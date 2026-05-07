@@ -26,6 +26,44 @@ router.get('/planes-proteccion', async (req, res) => {
 })
 
 // ─────────────────────────────────────────────────────────────
+// GET /api/reservas/admin/todas
+// Solo para administradores — no requiere ID_PERSONA
+// ─────────────────────────────────────────────────────────────
+router.get('/admin/todas', authenticateToken, async (req, res) => {
+  try {
+    const pool = getPool()
+    const { rows } = await pool.query(
+      `SELECT
+         r."ID_RESERVA",
+         r."FECHA_INICIO",
+         r."FECHA_FIN",
+         r."ID_ESTADO",
+         r."ID_CLIENTE",
+         r."ID_EMPLEADO",
+         r."ID_ORIGEN",
+         r."ID_DESTINO",
+         er."ESTADO"          AS estado_nombre,
+         p."NOMBRE_COMPLETO"  AS cliente_nombre,
+         uo."NOMBRE"          AS origen_nombre,
+         ud."NOMBRE"          AS destino_nombre,
+         pe."NOMBRE_COMPLETO" AS empleado_nombre
+       FROM "RESERVA" r
+       JOIN "ESTADO_RESERVA" er ON er."ID_ESTADO"    = r."ID_ESTADO"
+       LEFT JOIN "PERSONA"   p  ON p."ID_PERSONA"    = r."ID_CLIENTE"
+       LEFT JOIN "UBICACION" uo ON uo."ID_UBICACION" = r."ID_ORIGEN"
+       LEFT JOIN "UBICACION" ud ON ud."ID_UBICACION" = r."ID_DESTINO"
+       LEFT JOIN "EMPLEADO"  e  ON e."ID_EMPLEADO"   = r."ID_EMPLEADO"
+       LEFT JOIN "PERSONA"   pe ON pe."ID_PERSONA"   = e."ID_EMPLEADO"
+       ORDER BY r."ID_RESERVA" DESC`
+    )
+    res.json(rows)
+  } catch (err) {
+    console.error('Error al obtener todas las reservas:', err)
+    res.status(500).json({ message: 'Error al obtener reservas.' })
+  }
+})
+
+// ─────────────────────────────────────────────────────────────
 // POST /api/reservas/checkout
 // Procesa el checkout completo desde CheckoutReserva.vue.
 //
