@@ -362,7 +362,7 @@ router.get('/mis-reservas', authenticateToken, async (req, res) => {
 
     const idCliente = userRows[0].ID_PERSONA
 
-    const { rows } = await db.query(
+    const { rows } = await pool.query(
       `SELECT
          r."ID_RESERVA",
          r."FECHA_INICIO",
@@ -375,7 +375,6 @@ router.get('/mis-reservas', authenticateToken, async (req, res) => {
          dr."MONTO_RECARGO",
          th."NOMBRE"          AS tipo_habitacion,
          ho."ID_HOSPEDAJE",
-         p."NOMBRE_COMPLETO"  AS nombre_hospedaje,
          ub."NOMBRE"          AS ubicacion,
          hr."NOMBRE"          AS huesped_nombre,
          hr."APELLIDOS"       AS huesped_apellidos,
@@ -389,7 +388,6 @@ router.get('/mis-reservas', authenticateToken, async (req, res) => {
        JOIN "HABITACION"       h  ON h."ID_HABITACION" = dr."ID_HABITACION"
        JOIN "TIPO_HABITACION" th  ON th."ID_TIPO_HABITACION" = h."ID_TIPO_HABITACION"
        JOIN "HOSPEDAJE"       ho  ON ho."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
-       JOIN "PERSONA"          p  ON p."ID_PERSONA"  = ho."ID_HOSPEDAJE"
        JOIN "UBICACION"       ub  ON ub."ID_UBICACION" = ho."ID_UBICACION"
        LEFT JOIN "HUESPED_RESERVA" hr ON hr."ID_DETALLE" = dr."ID_DETALLE"
        WHERE r."ID_CLIENTE" = $1
