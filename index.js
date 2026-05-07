@@ -114,7 +114,12 @@ app.get('/', (req, res) => {
   res.json({ message: 'API running' })
 })
 
-app.use(errorHandler)
+app.use((err, req, res, next) => {
+  console.error('Error global:', err)
+  res.status(err.status || 500).json({
+    message: err.message || 'Error interno del servidor'
+  })
+})
 
 const start = async () => {
   try {
