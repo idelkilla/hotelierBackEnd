@@ -67,21 +67,19 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'tipo_pago inválido.' })
     }
 
-    // Obtener ID_PERSONA del usuario para usarlo como ID_CLIENTE
-    const { rows: userRows } = await client.query(
+    // ✅ Correcto: Validar usuario antes de iniciar transacción
+    const { rows: userRows } = await pool.query(
       `SELECT "ID_PERSONA" FROM public."USUARIO" WHERE "ID_USUARIO" = $1`,
       [req.user.id]
     )
-
     if (!userRows.length || !userRows[0].id_persona) {
       return res.status(401).json({ message: 'Usuario no autenticado como cliente.' })
     }
-
     const idCliente = userRows[0].id_persona
+    
+    await client.query('BEGIN') // ✅ BEGIN después de todas las validaciones
 
-    await client.query('BEGIN')
-
-    // ── 1. Verificar que la habitación existe y obtener precio ─
+    // ── 1. Verificar que la habitación existe y obtener precio ──
     const { rows: habRows } = await client.query(
       `SELECT h."ID_HABITACION", h."PRECIO_NOCHE", h."ID_HOSPEDAJE"
        FROM "HABITACION" h
