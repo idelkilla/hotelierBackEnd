@@ -37,18 +37,11 @@ router.get('/hospedaje/:id_hospedaje', async (req, res, next) => {
 
 router.post('/', upload.single('imagen'), async (req, res, next) => {
   try {
-    console.log('=== DEBUG POST IMAGEN ===')
-    console.log('file:', req.file)
-    console.log('body:', req.body)
-    console.log('id_hospedaje del body:', req.body.id_hospedaje)
-    console.log('tipo:', typeof req.body.id_hospedaje)
-
     if (!req.file) {
       return res.status(400).json({ error: 'No se subió ninguna imagen' })
     }
 
     const id_hospedaje = req.body.id_hospedaje || req.query.id_hospedaje
-    const { orden, alt_text } = req.body
 
     if (!id_hospedaje) {
       return res.status(400).json({ error: 'id_hospedaje es requerido' })
@@ -62,14 +55,22 @@ router.post('/', upload.single('imagen'), async (req, res, next) => {
       return res.status(404).json({ error: 'Hospedaje no encontrado' })
     }
 
-    // Cloudinary devuelve la URL pública directamente
     const urlPublica = req.file.path
+    const orden      = parseInt(req.body.orden) || 0
+    const alt_text   = req.body.alt_text || ''
 
-    const { rows: [img] } = await db.query(`
+    // ✅ Sin destructuring directo
+    const result = await db.query(`
       INSERT INTO public."IMAGEN_HOSPEDAJE" ("ID_HOSPEDAJE", "URL", "ORDEN", "ALT_TEXT")
       VALUES ($1, $2, $3, $4)
       RETURNING "ID_IMAGEN", "URL", "ORDEN", "ALT_TEXT"
-    `, [parseInt(id_hospedaje), urlPublica, parseInt(orden) || 0, alt_text || ''])
+    `, [parseInt(id_hospedaje), urlPublica, orden, alt_text])
+
+    if (!result.rows.length) {
+      return res.status(500).json({ error: 'No se pudo guardar la imagen' })
+    }
+
+    const img = result.rows[0]
 
     res.status(201).json({
       id:       img.ID_IMAGEN,
@@ -78,7 +79,10 @@ router.post('/', upload.single('imagen'), async (req, res, next) => {
       alt_text: img.ALT_TEXT,
       message:  'Imagen subida correctamente'
     })
-  } catch (err) { next(err) }
+  } catch (err) {
+    console.error('Error en POST /imagenes:', err)
+    next(err)
+  }
 })
 
 router.delete('/:id', async (req, res, next) => {
