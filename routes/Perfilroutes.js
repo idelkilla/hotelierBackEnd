@@ -86,17 +86,32 @@ router.post('/membresia', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// ── GET reseñas del usuario autenticado ──────────────────────
-router.get('/resenas', async (req, res, next) => {
+/router.get('/resenas', async (req, res, next) => {
   try {
-    const idPersona = req.user.id_persona || req.user.ID_PERSONA
-    console.log('👤 req.user completo:', JSON.stringify(req.user))
-    console.log('👤 idPersona:', idPersona)
+    // El token tiene decoded.id que es USUARIO.ID_USUARIO
+    const idUsuario = req.user.id
 
-    const { rows: todas } = await db.query(
-      `SELECT "ID_RESENA", "ID_CLIENTE" FROM "RESENA" ORDER BY "ID_RESENA" DESC LIMIT 5`
+    // Obtener el ID_PERSONA desde USUARIO
+    const { rows: usuarioRows } = await db.query(
+      `SELECT "ID_PERSONA" FROM "USUARIO" WHERE "ID_USUARIO" = $1`,
+      [idUsuario]
     )
-    console.log('📋 Últimas reseñas en BD:', JSON.stringify(todas))
+
+    if (!usuarioRows.length || !usuarioRows[0].ID_PERSONA) {
+      return res.json([]) // sin perfil vinculado, sin reseñas
+    }
+
+    const idPersona = usuarioRows[0].ID_PERSONA
+
+    // Verificar que existe como CLIENTE
+    const { rows: clienteRows } = await db.query(
+      `SELECT 1 FROM "CLIENTE" WHERE "ID_CLIENTE" = $1`,
+      [idPersona]
+    )
+
+    if (!clienteRows.length) {
+      return res.json([]) // no es cliente todavía
+    }
 
     const { rows } = await db.query(`
       SELECT
@@ -110,7 +125,6 @@ router.get('/resenas', async (req, res, next) => {
       ORDER BY r."ID_RESENA" DESC
     `, [idPersona])
 
-    console.log('✅ Reseñas del usuario:', rows.length)
     res.json(rows)
   } catch (err) { next(err) }
 })
