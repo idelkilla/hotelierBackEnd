@@ -123,6 +123,85 @@ router.post('/:id/habitaciones', async (req, res, next) => {
 })
 
 /**
+ * GET /api/hospedajes/:id/imagenes
+ */
+router.get('/:id/imagenes', async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT "ID_IMAGEN", "URL", "ORDEN", "ALT_TEXT"
+       FROM public."IMAGEN_HOSPEDAJE"
+       WHERE "ID_HOSPEDAJE" = $1
+       ORDER BY "ORDEN" ASC`,
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (err) { next(err) }
+})
+
+/**
+ * POST /api/hospedajes/:id/imagenes
+ */
+router.post('/:id/imagenes', upload.single('imagen'), async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { orden = 0, alt_text = '' } = req.body
+    const url = `/uploads/${req.file.filename}`
+
+    const { rows } = await db.query(
+      `INSERT INTO public."IMAGEN_HOSPEDAJE" ("URL", "ORDEN", "ALT_TEXT", "ID_HOSPEDAJE")
+       VALUES ($1, $2, $3, $4)
+       RETURNING "ID_IMAGEN", "URL", "ORDEN", "ALT_TEXT"`,
+      [url, parseInt(orden), alt_text, id]
+    )
+    res.status(201).json(rows[0])
+  } catch (err) { next(err) }
+})
+
+/**
+ * DELETE /api/hospedajes/:id/imagenes/:idImagen
+ */
+router.delete('/:id/imagenes/:idImagen', async (req, res, next) => {
+  try {
+    await db.query(
+      `DELETE FROM public."IMAGEN_HOSPEDAJE" WHERE "ID_IMAGEN" = $1 AND "ID_HOSPEDAJE" = $2`,
+      [req.params.idImagen, req.params.id]
+    )
+    res.json({ message: 'Imagen eliminada' })
+  } catch (err) { next(err) }
+})
+
+/**
+ * PUT /api/hospedajes/habitaciones-edit/:id
+ */
+router.put('/habitaciones-edit/:id', async (req, res, next) => {
+  const { id } = req.params
+  const { id_tipo_habitacion, capacidad_adulto, capacidad_ninos, precio_noche } = req.body
+  try {
+    const { rows } = await db.query(
+      `UPDATE public."HABITACION"
+       SET "ID_TIPO_HABITACION" = $1, "CAPACIDAD_ADULTO" = $2,
+           "CAPACIDAD_NINOS" = $3, "PRECIO_NOCHE" = $4
+       WHERE "ID_HABITACION" = $5 RETURNING *`,
+      [id_tipo_habitacion, capacidad_adulto, capacidad_ninos, precio_noche, id]
+    )
+    res.json({ message: 'Habitación actualizada', habitacion: rows[0] })
+  } catch (err) { next(err) }
+})
+
+/**
+ * DELETE /api/hospedajes/habitaciones-edit/:id
+ */
+router.delete('/habitaciones-edit/:id', async (req, res, next) => {
+  try {
+    await db.query(
+      `DELETE FROM public."HABITACION" WHERE "ID_HABITACION" = $1`,
+      [req.params.id]
+    )
+    res.json({ message: 'Habitación eliminada' })
+  } catch (err) { next(err) }
+})
+
+/**
  * PUT /api/hospedajes/:id
  * Actualización de datos básicos y ubicación
  */
