@@ -278,8 +278,59 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
       `, [numero_telefonico, codigo_pais || '+1', idPersona])
     }
 
-    // 4. Datos específicos por tipo
+    // 4. Cambio de tipo — insertar en tabla destino si no existe
+    const tipoActual = await db.query(`
+      SELECT
+        CASE
+          WHEN m."ID_CLIENTE"  IS NOT NULL THEN 'miembro'
+          WHEN c."ID_CLIENTE"  IS NOT NULL THEN 'cliente'
+          WHEN e."ID_EMPLEADO" IS NOT NULL THEN 'empleado'
+          ELSE 'usuario'
+        END AS tipo_actual
+      FROM public."USUARIO" u
+      LEFT JOIN public."EMPLEADO" e ON e."ID_EMPLEADO" = u."ID_PERSONA"
+      LEFT JOIN public."CLIENTE"  c ON c."ID_CLIENTE"  = u."ID_PERSONA"
+      LEFT JOIN public."MIEMBRO"  m ON m."ID_CLIENTE"  = u."ID_PERSONA"
+      WHERE u."ID_USUARIO" = $1
+    `, [id])
+
+    const tipoAnterior = tipoActual.rows[0]?.tipo_actual
     const t = tipo?.toLowerCase()
+
+    if (t && t !== tipoAnterior) {
+      // Insertar en tabla destino si no existe
+      if (t === 'empleado') {
+        await db.query(`
+          INSERT INTO public."EMPLEADO" ("ID_EMPLEADO", "FECHA_CONTRATACION")
+          VALUES ($1, CURRENT_DATE)
+          ON CONFLICT DO NOTHING
+        `, [idPersona])
+      }
+
+      if (t === 'cliente' || t === 'miembro') {
+        await db.query(`
+          INSERT INTO public."CLIENTE" ("ID_CLIENTE", "ESTADO_CLIENTE", "FECHA_REGISTRO")
+          VALUES ($1, 'A', CURRENT_DATE)
+          ON CONFLICT DO NOTHING
+        `, [idPersona])
+      }
+
+      if (t === 'miembro') {
+        // Generar número de miembro
+        const { rows: maxRows } = await db.query(
+          `SELECT COALESCE(MAX(CAST(SUBSTRING("NUMERO_MIEMBRO" FROM 4) AS INTEGER)), 0) + 1 AS next
+           FROM public."MIEMBRO"`
+        )
+        const numMiembro = `MEM${String(maxRows[0].next).padStart(6, '0')}`
+        await db.query(`
+          INSERT INTO public."MIEMBRO" ("ID_CLIENTE", "NUMERO_MIEMBRO", "FECHA_INICIO", "PUNTOS_FIDELIDAD")
+          VALUES ($1, $2, CURRENT_DATE, 0)
+          ON CONFLICT DO NOTHING
+        `, [idPersona, numMiembro])
+      }
+    }
+
+    // 5. Datos específicos por tipo
 
     if (t === 'empleado' && id_puesto) {
       await db.query(`
