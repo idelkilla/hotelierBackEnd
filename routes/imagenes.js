@@ -40,7 +40,8 @@ router.post('/', upload.single('imagen'), async (req, res, next) => {
     console.log('=== DEBUG POST IMAGEN ===')
     console.log('file:', req.file)
     console.log('body:', req.body)
-    console.log('query:', req.query)
+    console.log('id_hospedaje del body:', req.body.id_hospedaje)
+    console.log('tipo:', typeof req.body.id_hospedaje)
 
     if (!req.file) {
       return res.status(400).json({ error: 'No se subió ninguna imagen' })
