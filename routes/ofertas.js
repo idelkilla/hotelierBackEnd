@@ -9,8 +9,9 @@ router.get('/ofertas-finde', async (req, res) => {
     const { rows } = await pool.query(`
       SELECT
         h."ID_HOSPEDAJE"                                      AS id,
-        th."NOMBRE_TIPO"                                      AS nombre,
+        s."NOMBRE"                                            AS nombre,
         u."NOMBRE"                                            AS ubicacion,
+        ci."NOMBRE"                                           AS ciudad,
         h."CANCELACION",
         MIN(hab."PRECIO_NOCHE")::numeric(10,2)                AS precio_noche_original,
         MIN(d."PRECIO_AJUSTADO")::numeric(10,2)               AS precio_noche_oferta,
@@ -24,8 +25,9 @@ router.get('/ofertas-finde', async (req, res) => {
       FROM "DISPONIBILIDAD" d
       JOIN "HABITACION"     hab ON hab."ID_HABITACION"  = d."ID_HABITACION"
       JOIN "HOSPEDAJE"      h   ON h."ID_HOSPEDAJE"     = hab."ID_HOSPEDAJE"
+      JOIN "SERVICIO"       s   ON s."ID_SERVICIO"      = h."ID_HOSPEDAJE"
       JOIN "UBICACION"      u   ON u."ID_UBICACION"     = h."ID_UBICACION"
-      JOIN "TIPO_HOSPEDAJE" th  ON th."ID_TIPO"         = h."ID_TIPO"
+      JOIN "CIUDAD"         ci  ON ci."ID_CIUDAD"       = u."ID_CIUDAD"
       LEFT JOIN "IMAGEN_HOSPEDAJE" img ON img."ID_HOSPEDAJE" = h."ID_HOSPEDAJE"
       WHERE
         d."FECHA" BETWEEN
@@ -35,8 +37,8 @@ router.get('/ofertas-finde', async (req, res) => {
         AND d."ESTADO" = 'A'
         AND d."PRECIO_AJUSTADO" IS NOT NULL
         AND d."PRECIO_AJUSTADO" <= hab."PRECIO_NOCHE" * 0.80
-      GROUP BY h."ID_HOSPEDAJE", th."NOMBRE_TIPO", u."NOMBRE",
-               h."DESCRIPCION", h."CANCELACION"
+      GROUP BY h."ID_HOSPEDAJE", s."NOMBRE", u."NOMBRE", ci."NOMBRE",
+               h."CANCELACION"
       ORDER BY descuento_pct DESC
       LIMIT 8
     `)
