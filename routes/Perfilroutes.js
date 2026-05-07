@@ -91,5 +91,25 @@ router.post('/membresia', async (req, res, next) => {
     res.status(201).json(result[0])
   } catch (err) { next(err) }
 })
+// ── GET reseñas del usuario autenticado ───────────────────────
+router.get('/resenas', async (req, res, next) => {
+  try {
+    const idPersona = req.user.id_persona || req.user.ID_PERSONA
 
+    const { rows } = await db.query(`
+      SELECT
+        r."ID_RESENA"    AS id,
+        r."COMENTARIO"   AS texto,
+        r."CALIFICACION" AS estrellas,
+        s."NOMBRE"       AS titulo,
+        TO_CHAR(r."ID_RESENA", 'FM999999') AS fecha
+      FROM "RESENA" r
+      JOIN "SERVICIO" s ON s."ID_SERVICIO" = r."ID_SERVICIO"
+      WHERE r."ID_CLIENTE" = $1
+      ORDER BY r."ID_RESENA" DESC
+    `, [idPersona])
+
+    res.json(rows)
+  } catch (err) { next(err) }
+})
 export default router
