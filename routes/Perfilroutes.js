@@ -9,32 +9,87 @@ router.use(authenticateToken)
 router.get('/profile',        getProfile)
 router.put('/profile/update', updateProfile)
 
-// ── NUEVA: membresía del usuario ──────────────────────────────
+// ── GET membresía ─────────────────────────────────────────────
 router.get('/membresia', async (req, res, next) => {
   try {
     const idPersona = req.user.id_persona || req.user.ID_PERSONA
 
-    // USUARIO → PERSONA → CLIENTE → MIEMBRO → NIVEL
     const { rows } = await db.query(`
       SELECT
         m."NUMERO_MIEMBRO",
         m."FECHA_INICIO",
         m."PUNTOS_FIDELIDAD",
+        n."ID_NIVEL",
         n."NOMBRE_NIVEL",
         n."DESCRIPCION",
         n."PUNTOS_MINIMOS"
-      FROM "USUARIO" u
-      JOIN "CLIENTE" c  ON c."ID_CLIENTE"  = u."ID_PERSONA"
-      JOIN "MIEMBRO"  m  ON m."ID_CLIENTE"  = c."ID_CLIENTE"
+      FROM "MIEMBRO" m
       JOIN "NIVEL_MEMBRESIA" n ON n."ID_NIVEL" = m."ID_NIVEL"
-      WHERE u."ID_PERSONA" = $1
+      WHERE m."ID_CLIENTE" = $1
     `, [idPersona])
 
-    if (!rows.length) return res.json(null)   // no es miembro todavía
-    res.json(rows[0])
-  } catch (err) {
-    next(err)
-  }
+    res.json(rows[0] || null)
+  } catch (err) { next(err) }
+})
+
+// ── GET niveles disponibles (para el select del form) ─────────
+router.get('/membresia/niveles', async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT "ID_NIVEL", "NOMBRE_NIVEL", "PUNTOS_MINIMOS", "DESCRIPCION"
+      FROM "NIVEL_MEMBRESIA"
+      ORDER BY "PUNTOS_MINIMOS" ASC
+    `)
+    res.json(rows)
+  } catch (err) { next(err) }
+})
+
+// ── POST crear membresía ──────────────────────────────────────
+router.post('/membresia', async (req, res, next) => {
+  try {
+    const idPersona = req.user.id_persona || req.user.ID_PERSONA
+    const { id_nivel } = req.body
+
+    if (!id_nivel) return res.status(400).json({ error: 'El nivel es requerido.' })
+
+    // Verificar que no tenga ya una membresía
+    const { rows: existe } = await db.query(
+      `SELECT 1 FROM "MIEMBRO" WHERE "ID_CLIENTE" = $1`, [idPersona]
+    )
+    if (existe.length) return res.status(409).json({ error: 'Ya tienes una membresía activa.' })
+
+    // Verificar que exista como CLIENTE, si no crearlo
+    const { rows: cliente } = await db.query(
+      `SELECT 1 FROM "CLIENTE" WHERE "ID_CLIENTE" = $1`, [idPersona]
+    )
+    if (!cliente.length) {
+      await db.query(`
+        INSERT INTO "CLIENTE" ("ID_CLIENTE","ESTADO_CLIENTE","FECHA_REGISTRO")
+        VALUES ($1, 'A', CURRENT_DATE)
+      `, [idPersona])
+    }
+
+    // Generar número de miembro único: MEM-XXXXX
+    const numeroMiembro = 'MEM-' + String(idPersona).padStart(5, '0')
+
+    const { rows } = await db.query(`
+      INSERT INTO "MIEMBRO" ("ID_CLIENTE","NUMERO_MIEMBRO","FECHA_INICIO","PUNTOS_FIDELIDAD","ID_NIVEL")
+      VALUES ($1, $2, CURRENT_DATE, 0, $3)
+      RETURNING *
+    `, [idPersona, numeroMiembro, id_nivel])
+
+    // Devolver con datos del nivel
+    const { rows: result } = await db.query(`
+      SELECT
+        m."NUMERO_MIEMBRO", m."FECHA_INICIO", m."PUNTOS_FIDELIDAD",
+        n."ID_NIVEL", n."NOMBRE_NIVEL", n."DESCRIPCION", n."PUNTOS_MINIMOS"
+      FROM "MIEMBRO" m
+      JOIN "NIVEL_MEMBRESIA" n ON n."ID_NIVEL" = m."ID_NIVEL"
+      WHERE m."ID_CLIENTE" = $1
+    `, [idPersona])
+
+    res.status(201).json(result[0])
+  } catch (err) { next(err) }
 })
 
 export default router
